@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from pathlib import Path
 
 SCHEMA_SQL = """
@@ -32,11 +34,13 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 """
 
 
-def connect_product_db(db_path: Path) -> sqlite3.Connection:
+@contextmanager
+def connect_product_db(db_path: Path) -> Iterator[sqlite3.Connection]:
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(db_path)
-    connection.row_factory = sqlite3.Row
-    return connection
+    with closing(sqlite3.connect(db_path)) as connection:
+        connection.row_factory = sqlite3.Row
+        with connection:
+            yield connection
 
 
 def initialize_product_db(db_path: Path) -> None:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from easy_claw.skills import Skill
 
@@ -31,6 +31,51 @@ class AgentRuntime(Protocol):
         """Run one agent turn."""
 
 
+class ApprovalReviewer(Protocol):
+    def review(self, interrupts: Sequence[object]) -> list[dict[str, object]]:
+        """Return LangGraph HITL decisions for interrupt payloads."""
+
+
+class StaticApprovalReviewer:
+    def __init__(self, *, approve: bool) -> None:
+        self._approve = approve
+
+    def review(self, interrupts: Sequence[object]) -> list[dict[str, object]]:
+        decisions: list[dict[str, object]] = []
+        for interrupt in interrupts:
+            action_count = max(1, len(_get_action_requests(_interrupt_value(interrupt))))
+            decision_type = "approve" if self._approve else "reject"
+            for _ in range(action_count):
+                if decision_type == "approve":
+                    decisions.append({"type": "approve"})
+                else:
+                    decisions.append({"type": "reject", "message": "Rejected by user."})
+        return decisions
+
+
+class ConsoleApprovalReviewer:
+    def review(self, interrupts: Sequence[object]) -> list[dict[str, object]]:
+        decisions: list[dict[str, object]] = []
+        for interrupt in interrupts:
+            value = _interrupt_value(interrupt)
+            actions = _get_action_requests(value) or [{}]
+            for action in actions:
+                name = _read_field(action, "name") or "unknown"
+                args = _read_field(action, "args") or {}
+                description = _read_field(action, "description")
+                print("\nTool execution requires approval")
+                print(f"Tool: {name}")
+                print(f"Args: {args}")
+                if description:
+                    print(f"Reason: {description}")
+                answer = input("Allow this action? [y/N] ").strip().lower()
+                if answer in {"y", "yes"}:
+                    decisions.append({"type": "approve"})
+                else:
+                    decisions.append({"type": "reject", "message": "Rejected by user."})
+        return decisions
+
+
 class FakeAgentRuntime:
     def run(self, request: AgentRequest) -> AgentResult:
         return AgentResult(
@@ -40,6 +85,9 @@ class FakeAgentRuntime:
 
 
 class DeepAgentsRuntime:
+    def __init__(self, reviewer: ApprovalReviewer | None = None) -> None:
+        self._reviewer = reviewer or ConsoleApprovalReviewer()
+
     def run(self, request: AgentRequest) -> AgentResult:
         if request.model is None:
             raise RuntimeError("Set EASY_CLAW_MODEL before running chat without --dry-run.")
@@ -67,9 +115,11 @@ class DeepAgentsRuntime:
                 checkpointer=checkpointer,
                 interrupt_on=interrupt_on,
             )
-            result = agent.invoke(
+            result = _invoke_with_approval(
+                agent,
                 {"messages": [{"role": "user", "content": request.prompt}]},
                 config={"configurable": {"thread_id": request.thread_id}},
+                reviewer=self._reviewer,
             )
 
         return AgentResult(
@@ -112,3 +162,45 @@ def _extract_last_message_content(result: object) -> str:
     if content is None and isinstance(last_message, dict):
         content = last_message.get("content")
     return str(content or "")
+
+
+def _invoke_with_approval(
+    agent: Any,
+    input_value: object,
+    *,
+    config: dict[str, object],
+    reviewer: ApprovalReviewer,
+) -> object:
+    from langgraph.types import Command
+
+    result = agent.invoke(input_value, config)
+    while interrupts := _extract_interrupts(result):
+        decisions = reviewer.review(interrupts)
+        result = agent.invoke(Command(resume={"decisions": decisions}), config)
+    return result
+
+
+def _extract_interrupts(result: object) -> tuple[object, ...]:
+    if not isinstance(result, dict):
+        return ()
+    interrupts = result.get("__interrupt__")
+    if not interrupts:
+        return ()
+    return tuple(interrupts)
+
+
+def _interrupt_value(interrupt: object) -> object:
+    return getattr(interrupt, "value", interrupt)
+
+
+def _get_action_requests(value: object) -> list[object]:
+    actions = _read_field(value, "action_requests")
+    if actions is None:
+        return []
+    return list(actions)
+
+
+def _read_field(value: object, field_name: str) -> object | None:
+    if isinstance(value, dict):
+        return value.get(field_name)
+    return getattr(value, field_name, None)

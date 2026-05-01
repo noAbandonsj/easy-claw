@@ -44,9 +44,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     def get_session(session_id: str) -> dict[str, str | None]:
         initialize_product_db(app_config.product_db_path)
         repo = SessionRepository(app_config.product_db_path)
-        for session in repo.list_sessions():
-            if session.id == session_id:
-                return session.__dict__
+        session = repo.get_session(session_id)
+        if session is not None:
+            return session.__dict__
         raise HTTPException(status_code=404, detail="Session not found")
 
     return app

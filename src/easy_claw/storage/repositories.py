@@ -90,6 +90,20 @@ class SessionRepository:
             ).fetchall()
         return [SessionRecord(**dict(row)) for row in rows]
 
+    def get_session(self, session_id: str) -> SessionRecord | None:
+        with connect_product_db(self._db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT id, title, workspace_path, model, created_at, updated_at
+                FROM sessions
+                WHERE id = ?
+                """,
+                (session_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return SessionRecord(**dict(row))
+
 
 class MemoryRepository:
     def __init__(self, db_path: Path) -> None:
