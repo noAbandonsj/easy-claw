@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
 
 import typer
 import uvicorn
@@ -13,8 +14,8 @@ from easy_claw.skills import discover_skills
 from easy_claw.storage.db import initialize_product_db
 from easy_claw.storage.repositories import MemoryRepository, SessionRepository
 
-
 console = Console()
+DEFAULT_SKILLS_ROOT = Path("skills")
 app = typer.Typer(help="easy-claw local AI agent workbench")
 skills_app = typer.Typer(help="Manage Markdown skills")
 memory_app = typer.Typer(help="Manage explicit product memory")
@@ -44,7 +45,9 @@ def init_db() -> None:
 
 
 @skills_app.command("list")
-def list_skills(skills_root: Path = typer.Option(Path("skills"), "--skills-root")) -> None:
+def list_skills(
+    skills_root: Annotated[Path, typer.Option("--skills-root")] = DEFAULT_SKILLS_ROOT,
+) -> None:
     """List available Markdown skills."""
     skills = discover_skills(skills_root)
     table = Table("Name", "Description", "Path")

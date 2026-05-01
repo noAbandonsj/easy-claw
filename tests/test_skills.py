@@ -5,7 +5,12 @@ def test_discover_skills_reads_deep_agents_style_skill(tmp_path):
     skill_dir = tmp_path / "skills" / "core" / "analyze-project"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(
-        "---\nname: analyze-project\ndescription: Analyze a local project.\n---\n# Skill\nRead files.",
+        "---\n"
+        "name: analyze-project\n"
+        "description: Analyze a local project.\n"
+        "---\n"
+        "# Skill\n"
+        "Read files.",
         encoding="utf-8",
     )
 

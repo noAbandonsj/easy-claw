@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol, Sequence
+from typing import Protocol
 
 from easy_claw.skills import Skill
 
@@ -71,7 +72,9 @@ class DeepAgentsRuntime:
                 config={"configurable": {"thread_id": request.thread_id}},
             )
 
-        return AgentResult(content=_extract_last_message_content(result), thread_id=request.thread_id)
+        return AgentResult(
+            content=_extract_last_message_content(result), thread_id=request.thread_id
+        )
 
 
 def _build_system_prompt(skills: Sequence[Skill], memories: Sequence[str]) -> str:
@@ -81,9 +84,13 @@ def _build_system_prompt(skills: Sequence[Skill], memories: Sequence[str]) -> st
         "Do not execute commands or write files without human approval.",
     ]
     if skills:
-        sections.append("Available Markdown skills:\n" + "\n\n".join(_format_skill(skill) for skill in skills))
+        sections.append(
+            "Available Markdown skills:\n" + "\n\n".join(_format_skill(skill) for skill in skills)
+        )
     if memories:
-        sections.append("Explicit product memories:\n" + "\n".join(f"- {memory}" for memory in memories))
+        sections.append(
+            "Explicit product memories:\n" + "\n".join(f"- {memory}" for memory in memories)
+        )
     return "\n\n".join(sections)
 
 
