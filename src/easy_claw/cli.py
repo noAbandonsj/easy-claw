@@ -7,10 +7,11 @@ import uvicorn
 from rich.console import Console
 from rich.table import Table
 
+from easy_claw.agent.runtime import AgentRequest, DeepAgentsRuntime, FakeAgentRuntime
 from easy_claw.config import load_config
 from easy_claw.skills import discover_skills
 from easy_claw.storage.db import initialize_product_db
-from easy_claw.storage.repositories import MemoryRepository
+from easy_claw.storage.repositories import MemoryRepository, SessionRepository
 
 
 console = Console()
@@ -78,11 +79,44 @@ def chat(
     dry_run: bool = typer.Option(False, "--dry-run"),
 ) -> None:
     """Run a chat request. Use --dry-run for deterministic smoke checks."""
+    config = load_config()
     if dry_run:
-        console.print(f"easy-claw dry run: {prompt}")
+        result = FakeAgentRuntime().run(
+            AgentRequest(
+                prompt=prompt,
+                thread_id="dry-run",
+                workspace_path=config.default_workspace,
+                model=None,
+            )
+        )
+        console.print(result.content)
         return
 
-    raise typer.BadParameter("chat requires agent runtime wiring; use --dry-run for smoke checks")
+    if config.model is None:
+        console.print("Set EASY_CLAW_MODEL before running chat without --dry-run.")
+        raise typer.Exit(code=1)
+
+    initialize_product_db(config.product_db_path)
+    session = SessionRepository(config.product_db_path).create_session(
+        workspace_path=str(config.default_workspace),
+        model=config.model,
+        title=prompt[:60] or "Chat",
+    )
+    skills = discover_skills(config.cwd / "skills")
+    memories = [item.content for item in MemoryRepository(config.product_db_path).list_memory()]
+    result = DeepAgentsRuntime().run(
+        AgentRequest(
+            prompt=prompt,
+            thread_id=session.id,
+            workspace_path=config.default_workspace,
+            model=config.model,
+            skills=skills,
+            memories=memories,
+            checkpoint_db_path=config.checkpoint_db_path,
+            developer_mode=config.developer_mode,
+        )
+    )
+    console.print(result.content)
 
 
 def main() -> None:
