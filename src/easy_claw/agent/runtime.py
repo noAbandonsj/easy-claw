@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from easy_claw.agent.tools import build_agent_tools
+
 
 @dataclass(frozen=True)
 class AgentRequest:
@@ -105,15 +107,23 @@ class DeepAgentsRuntime:
         from deepagents.backends import FilesystemBackend
         from langgraph.checkpoint.sqlite import SqliteSaver
 
+        agent_tools = build_agent_tools(
+            workspace_path=request.workspace_path,
+            cwd=request.workspace_path,
+        )
         interrupt_on = {
             "edit_file": True,
             "write_file": True,
+            "run_command": True,
+            "run_python": True,
+            "write_report": True,
         }
 
         checkpointer_context = SqliteSaver.from_conn_string(str(request.checkpoint_db_path))
         checkpointer = checkpointer_context.__enter__()
         agent = create_deep_agent(
             model=_build_chat_model(request.model, request.base_url, request.api_key),
+            tools=agent_tools,
             system_prompt=system_prompt,
             skills=list(request.skill_sources) or None,
             backend=FilesystemBackend(root_dir=request.workspace_path, virtual_mode=True),

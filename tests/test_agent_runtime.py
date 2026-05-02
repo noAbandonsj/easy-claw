@@ -153,7 +153,10 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
     assert captured["skills"] == ["/skills/core/"]
     assert captured["backend_root_dir"] == tmp_path
     assert captured["backend_virtual_mode"] is True
-    assert set(captured["interrupt_on"]) == {"edit_file", "write_file"}
+    assert set(captured["interrupt_on"]) == {"edit_file", "write_file", "run_command", "run_python", "write_report"}
+    assert len(captured["tools"]) == 5
+    tool_names = {t.name for t in captured["tools"]}
+    assert tool_names == {"search_web", "run_command", "run_python", "read_document", "write_report"}
     assert "Use Chinese." in captured["system_prompt"]
 
 
