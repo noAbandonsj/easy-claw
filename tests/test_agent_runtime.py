@@ -1,11 +1,14 @@
 from dataclasses import dataclass
 
+import pytest
 from langgraph.types import Command
 
 from easy_claw.agent.runtime import (
     AgentRequest,
+    DeepAgentsRuntime,
     FakeAgentRuntime,
     StaticApprovalReviewer,
+    _build_deepseek_chat_model,
     _invoke_with_approval,
 )
 
@@ -19,13 +22,29 @@ def test_fake_agent_runtime_returns_deterministic_result(tmp_path):
             thread_id="thread-1",
             workspace_path=tmp_path,
             model=None,
-            skills=[],
+            skill_sources=[],
             memories=[],
         )
     )
 
     assert result.content == "easy-claw dry run: hello"
     assert result.thread_id == "thread-1"
+
+
+def test_build_deepseek_chat_model_requires_api_key(monkeypatch):
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+
+    with pytest.raises(RuntimeError, match="DEEPSEEK_API_KEY"):
+        _build_deepseek_chat_model("deepseek-v4-pro")
+
+
+def test_build_deepseek_chat_model_uses_deepseek_endpoint(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+
+    model = _build_deepseek_chat_model("deepseek-v4-pro")
+
+    assert model.model_name == "deepseek-v4-pro"
+    assert str(model.openai_api_base).rstrip("/") == "https://api.deepseek.com"
 
 
 @dataclass
@@ -78,3 +97,102 @@ def test_invoke_with_approval_resumes_after_interrupt():
     assert result["messages"][-1]["content"] == "done"
     assert isinstance(agent.inputs[1], Command)
     assert agent.inputs[1].resume == {"decisions": [{"type": "approve"}]}
+
+
+def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, monkeypatch):
+    captured = {}
+
+    class FakeBackend:
+        def __init__(self, *, root_dir, virtual_mode):
+            captured["backend_root_dir"] = root_dir
+            captured["backend_virtual_mode"] = virtual_mode
+
+    class FakeDeepAgent:
+        def __init__(self):
+            self.invoke_count = 0
+
+        def invoke(self, input_value, config):
+            self.invoke_count += 1
+            return {"messages": [{"role": "assistant", "content": "done"}]}
+
+    def fake_create_deep_agent(**kwargs):
+        captured.update(kwargs)
+        return FakeDeepAgent()
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setattr(
+        "easy_claw.agent.runtime._build_deepseek_chat_model",
+        lambda model: "deepseek-chat-model",
+    )
+    monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
+    monkeypatch.setattr("deepagents.backends.FilesystemBackend", FakeBackend)
+
+    result = DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True)).run(
+        AgentRequest(
+            prompt="hello",
+            thread_id="thread-1",
+            workspace_path=tmp_path,
+            model="deepseek-v4-pro",
+            skill_sources=["/skills/core/"],
+            memories=["Use Chinese."],
+            checkpoint_db_path=tmp_path / "checkpoints.sqlite",
+        )
+    )
+
+    assert result.content == "done"
+    assert captured["model"] == "deepseek-chat-model"
+    assert captured["skills"] == ["/skills/core/"]
+    assert captured["backend_root_dir"] == tmp_path
+    assert captured["backend_virtual_mode"] is True
+    assert set(captured["interrupt_on"]) == {"edit_file", "write_file"}
+    assert "Use Chinese." in captured["system_prompt"]
+
+
+def test_deepagents_session_reuses_agent_between_turns(tmp_path, monkeypatch):
+    captured = {"create_count": 0}
+
+    class FakeBackend:
+        def __init__(self, *, root_dir, virtual_mode):
+            pass
+
+    class FakeDeepAgent:
+        def __init__(self):
+            self.prompts = []
+
+        def invoke(self, input_value, config):
+            self.prompts.append(input_value["messages"][0]["content"])
+            return {
+                "messages": [
+                    {"role": "assistant", "content": f"answer {len(self.prompts)}"}
+                ]
+            }
+
+    def fake_create_deep_agent(**kwargs):
+        captured["create_count"] += 1
+        captured["agent"] = FakeDeepAgent()
+        return captured["agent"]
+
+    monkeypatch.setattr(
+        "easy_claw.agent.runtime._build_deepseek_chat_model",
+        lambda model: "deepseek-chat-model",
+    )
+    monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
+    monkeypatch.setattr("deepagents.backends.FilesystemBackend", FakeBackend)
+
+    runtime = DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True))
+    with runtime.open_session(
+        AgentRequest(
+            prompt="",
+            thread_id="thread-1",
+            workspace_path=tmp_path,
+            model="deepseek-v4-pro",
+            checkpoint_db_path=tmp_path / "checkpoints.sqlite",
+        )
+    ) as session:
+        first = session.run("first")
+        second = session.run("second")
+
+    assert first.content == "answer 1"
+    assert second.content == "answer 2"
+    assert captured["create_count"] == 1
+    assert captured["agent"].prompts == ["first", "second"]

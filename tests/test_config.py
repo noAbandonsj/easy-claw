@@ -18,55 +18,48 @@ def test_load_config_reads_env_overrides(tmp_path, monkeypatch):
     workspace = tmp_path / "workspace"
     monkeypatch.setenv("EASY_CLAW_DATA_DIR", str(data_dir))
     monkeypatch.setenv("EASY_CLAW_WORKSPACE", str(workspace))
-    monkeypatch.setenv("EASY_CLAW_MODEL", "openai:gpt-4.1-mini")
-    monkeypatch.setenv("EASY_CLAW_DEVELOPER_MODE", "true")
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
 
     config = load_config(cwd=tmp_path)
 
     assert config.data_dir == data_dir
     assert config.default_workspace == workspace
-    assert config.model == "openai:gpt-4.1-mini"
-    assert config.developer_mode is True
+    assert config.model == "deepseek-v4-pro"
 
 
 def test_load_config_reads_dotenv_file(tmp_path, monkeypatch):
     monkeypatch.delenv("EASY_CLAW_MODEL", raising=False)
-    monkeypatch.delenv("EASY_CLAW_DEVELOPER_MODE", raising=False)
     (tmp_path / ".env").write_text(
-        "\n".join(
-            [
-                "EASY_CLAW_MODEL=openai:gpt-4.1-mini",
-                "EASY_CLAW_DEVELOPER_MODE=yes",
-            ]
-        ),
+        "EASY_CLAW_MODEL=deepseek-v4-pro",
         encoding="utf-8",
     )
 
     config = load_config(cwd=tmp_path)
 
-    assert config.model == "openai:gpt-4.1-mini"
-    assert config.developer_mode is True
+    assert config.model == "deepseek-v4-pro"
 
 
 def test_load_config_prefers_process_env_over_dotenv(tmp_path, monkeypatch):
     (tmp_path / ".env").write_text(
-        "EASY_CLAW_MODEL=openai:from-dotenv",
+        "EASY_CLAW_MODEL=deepseek-from-dotenv",
         encoding="utf-8",
     )
-    monkeypatch.setenv("EASY_CLAW_MODEL", "openai:from-process")
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-from-process")
 
     config = load_config(cwd=tmp_path)
 
-    assert config.model == "openai:from-process"
+    assert config.model == "deepseek-from-process"
 
 
-def test_load_config_exports_dotenv_values_for_provider_libraries(tmp_path, monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+def test_load_config_exports_deepseek_dotenv_values_for_provider_libraries(
+    tmp_path, monkeypatch
+):
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     (tmp_path / ".env").write_text(
-        "OPENAI_API_KEY=from-dotenv",
+        "DEEPSEEK_API_KEY=from-dotenv",
         encoding="utf-8",
     )
 
     load_config(cwd=tmp_path)
 
-    assert os.environ["OPENAI_API_KEY"] == "from-dotenv"
+    assert os.environ["DEEPSEEK_API_KEY"] == "from-dotenv"

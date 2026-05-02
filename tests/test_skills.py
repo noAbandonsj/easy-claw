@@ -1,4 +1,4 @@
-from easy_claw.skills import discover_skills
+from easy_claw.skills import discover_skill_sources, discover_skills
 
 
 def test_discover_skills_reads_deep_agents_style_skill(tmp_path):
@@ -32,3 +32,16 @@ def test_discover_skills_reads_flat_markdown_skill(tmp_path):
     skills = discover_skills(tmp_path / "skills")
 
     assert skills[0].name == "summarize-docs"
+
+
+def test_discover_skill_sources_returns_deepagents_source_dirs(tmp_path):
+    skill_dir = tmp_path / "skills" / "core" / "analyze-project"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: analyze-project\ndescription: Analyze.\n---\n# Skill",
+        encoding="utf-8",
+    )
+
+    sources = discover_skill_sources(tmp_path / "skills", tmp_path)
+
+    assert sources == ["/skills/core/"]

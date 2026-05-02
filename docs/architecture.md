@@ -552,13 +552,20 @@ easy-claw/
 - 基础配置
 - 最小执行确认 API
 
-### v0.2: Agent + Skills
+### v0.2: 本地文档助手与强工具可用性
 
-- LangChain Agent Runtime
-- Skill Loader
-- 只读文件工具
-- 报告生成工具
-- 本机命令工具，必须经过人工确认
+- 复用第一版已有的 DeepAgents Runtime 和 Skill Loader
+- 工作区作为默认上下文，但允许用户显式传入本机路径
+- 文件选择、读取、写报告和路径解析
+- MarkItDown 文档转 Markdown
+- DuckDuckGo 搜索工具
+- PowerShell / Shell 命令工具，默认设置超时和输出截断
+- Python 脚本 / 片段执行工具，用于本地数据和文档处理
+- 本地文档总结 CLI
+- Markdown 报告输出
+- 可被 Web UI 复用的 `POST /runs` 或同类 API
+- 轻量活动日志，记录读文件、转文档、搜索、命令执行、写报告等关键动作
+- 暂不做完整审批引擎、沙箱隔离和复杂权限系统，优先把工具能力开放出来并做顺
 
 ### v0.3: MCP
 

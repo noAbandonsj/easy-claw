@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
-from easy_claw.skills import Skill
-
+DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 
 @dataclass(frozen=True)
 class AgentRequest:
@@ -14,10 +14,9 @@ class AgentRequest:
     thread_id: str
     workspace_path: Path
     model: str | None
-    skills: Sequence[Skill] = field(default_factory=tuple)
+    skill_sources: Sequence[str] = field(default_factory=tuple)
     memories: Sequence[str] = field(default_factory=tuple)
     checkpoint_db_path: Path | None = None
-    developer_mode: bool = False
 
 
 @dataclass(frozen=True)
@@ -44,9 +43,8 @@ class StaticApprovalReviewer:
         decisions: list[dict[str, object]] = []
         for interrupt in interrupts:
             action_count = max(1, len(_get_action_requests(_interrupt_value(interrupt))))
-            decision_type = "approve" if self._approve else "reject"
             for _ in range(action_count):
-                if decision_type == "approve":
+                if self._approve:
                     decisions.append({"type": "approve"})
                 else:
                     decisions.append({"type": "reject", "message": "Rejected by user."})
@@ -89,13 +87,17 @@ class DeepAgentsRuntime:
         self._reviewer = reviewer or ConsoleApprovalReviewer()
 
     def run(self, request: AgentRequest) -> AgentResult:
+        with self.open_session(request) as session:
+            return session.run(request.prompt)
+
+    def open_session(self, request: AgentRequest) -> DeepAgentSession:
         if request.model is None:
             raise RuntimeError("Set EASY_CLAW_MODEL before running chat without --dry-run.")
         if request.checkpoint_db_path is None:
             raise RuntimeError("checkpoint_db_path is required for DeepAgentsRuntime.")
 
         request.checkpoint_db_path.parent.mkdir(parents=True, exist_ok=True)
-        system_prompt = _build_system_prompt(request.skills, request.memories)
+        system_prompt = _build_system_prompt(request.memories)
 
         from deepagents import create_deep_agent
         from deepagents.backends import FilesystemBackend
@@ -104,49 +106,87 @@ class DeepAgentsRuntime:
         interrupt_on = {
             "edit_file": True,
             "write_file": True,
-            "execute": True,
         }
 
-        with SqliteSaver.from_conn_string(str(request.checkpoint_db_path)) as checkpointer:
-            agent = create_deep_agent(
-                model=request.model,
-                system_prompt=system_prompt,
-                backend=FilesystemBackend(root_dir=request.workspace_path),
-                checkpointer=checkpointer,
-                interrupt_on=interrupt_on,
-            )
-            result = _invoke_with_approval(
-                agent,
-                {"messages": [{"role": "user", "content": request.prompt}]},
-                config={"configurable": {"thread_id": request.thread_id}},
-                reviewer=self._reviewer,
-            )
-
-        return AgentResult(
-            content=_extract_last_message_content(result), thread_id=request.thread_id
+        checkpointer_context = SqliteSaver.from_conn_string(str(request.checkpoint_db_path))
+        checkpointer = checkpointer_context.__enter__()
+        agent = create_deep_agent(
+            model=_build_deepseek_chat_model(request.model),
+            system_prompt=system_prompt,
+            skills=list(request.skill_sources) or None,
+            backend=FilesystemBackend(root_dir=request.workspace_path, virtual_mode=True),
+            checkpointer=checkpointer,
+            interrupt_on=interrupt_on,
+        )
+        return DeepAgentSession(
+            agent=agent,
+            thread_id=request.thread_id,
+            reviewer=self._reviewer,
+            checkpointer_context=checkpointer_context,
         )
 
 
-def _build_system_prompt(skills: Sequence[Skill], memories: Sequence[str]) -> str:
+class DeepAgentSession:
+    def __init__(
+        self,
+        *,
+        agent: Any,
+        thread_id: str,
+        reviewer: ApprovalReviewer,
+        checkpointer_context: object,
+    ) -> None:
+        self._agent = agent
+        self._thread_id = thread_id
+        self._reviewer = reviewer
+        self._checkpointer_context = checkpointer_context
+
+    def __enter__(self) -> DeepAgentSession:
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        self._checkpointer_context.__exit__(None, None, None)
+
+    def run(self, prompt: str) -> AgentResult:
+        result = _invoke_with_approval(
+            self._agent,
+            {"messages": [{"role": "user", "content": prompt}]},
+            config={"configurable": {"thread_id": self._thread_id}},
+            reviewer=self._reviewer,
+        )
+        return AgentResult(
+            content=_extract_last_message_content(result),
+            thread_id=self._thread_id,
+        )
+
+
+def _build_deepseek_chat_model(model: str) -> object:
+    api_key = os.environ.get("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise RuntimeError("Set DEEPSEEK_API_KEY before running chat without --dry-run.")
+
+    from langchain_openai import ChatOpenAI
+
+    return ChatOpenAI(
+        model=model,
+        api_key=api_key,
+        base_url=DEEPSEEK_BASE_URL,
+    )
+
+
+def _build_system_prompt(memories: Sequence[str]) -> str:
     sections = [
         "You are easy-claw, a Windows-first local personal AI workbench.",
         "Operate only inside the selected workspace unless the user explicitly approves otherwise.",
         "Do not execute commands or write files without human approval.",
     ]
-    if skills:
-        sections.append(
-            "Available Markdown skills:\n" + "\n\n".join(_format_skill(skill) for skill in skills)
-        )
     if memories:
         sections.append(
             "Explicit product memories:\n" + "\n".join(f"- {memory}" for memory in memories)
         )
     return "\n\n".join(sections)
-
-
-def _format_skill(skill: Skill) -> str:
-    description = f": {skill.description}" if skill.description else ""
-    return f"## {skill.name}{description}\n{skill.body}"
 
 
 def _extract_last_message_content(result: object) -> str:

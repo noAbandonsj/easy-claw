@@ -177,3 +177,14 @@ class AuditRepository:
                 (record.id, record.event_type, record.payload_json, record.created_at),
             )
         return record
+
+    def list_logs(self) -> list[AuditLog]:
+        with connect_product_db(self._db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT id, event_type, payload_json, created_at
+                FROM audit_logs
+                ORDER BY created_at DESC
+                """
+            ).fetchall()
+        return [AuditLog(**dict(row)) for row in rows]

@@ -40,18 +40,18 @@ uv sync
 Copy-Item .env.example .env
 ```
 
-编辑 `.env`，至少配置模型。使用 OpenAI 模型时，还需要配置 `OPENAI_API_KEY`：
+编辑 `.env`，至少配置 DeepSeek 模型和 API Key：
 
 ```env
-EASY_CLAW_MODEL=openai:gpt-4.1-mini
-OPENAI_API_KEY=你的 API Key
+EASY_CLAW_MODEL=deepseek-v4-pro
+DEEPSEEK_API_KEY=你的 API Key
 ```
 
 也可以不写 `.env`，直接在当前 PowerShell 会话中设置环境变量：
 
 ```powershell
-$env:EASY_CLAW_MODEL = "openai:gpt-4.1-mini"
-$env:OPENAI_API_KEY = "你的 API Key"
+$env:EASY_CLAW_MODEL = "deepseek-v4-pro"
+$env:DEEPSEEK_API_KEY = "你的 API Key"
 ```
 
 进程环境变量优先级高于 `.env` 文件。
@@ -120,7 +120,13 @@ uv run easy-claw chat --dry-run "你好，介绍一下这个项目"
 uv run easy-claw chat "请总结这个项目的 README"
 ```
 
-当前第一版的 `chat` 是一次命令一次请求，不是持续交互式 REPL。需要连续提问时，重复执行 `easy-claw chat` 命令即可。
+交互式对话：
+
+```powershell
+uv run easy-claw chat --interactive
+```
+
+进入交互模式后，同一个 CLI 进程会复用同一个会话和 Agent thread。输入 `exit`、`quit` 或 `:q` 可以退出。
 
 列出内置 Markdown Skills：
 
@@ -132,6 +138,16 @@ uv run easy-claw skills list
 
 ```powershell
 uv run easy-claw memory list
+```
+
+第二版本地文档和强工具命令：
+
+```powershell
+uv run easy-claw docs summarize README.md
+uv run easy-claw docs summarize docs --output data/reports/docs-summary.md
+uv run easy-claw tools search "DeepSeek API tool calls"
+uv run easy-claw tools run "pytest -q"
+uv run easy-claw tools python "print('hello from easy-claw')"
 ```
 
 ## 项目定位
@@ -318,13 +334,15 @@ easy-claw/
 
 实现 `pyproject.toml`、`uv.lock`、FastAPI、SQLite、配置加载、会话存储、基础 CLI 或 Web UI。先能通过 `start.ps1` 和 `uv run` 启动、能对话、能保存消息，并具备最小执行确认流程。
 
-### Phase 2: Agent Runtime
+### Phase 2: 本地文档助手与强工具可用性
 
-封装 LangChain Agent，接入基础工具、Markdown Skills 和本机命令执行器。Agent 不直接依赖具体工具实现，而是通过 Tool Registry 获取工具；命令执行必须经过人工确认。
+把第一版已经跑通的 Agent Runtime 做成真正可用的本地助手。重点不是完整安全体系，而是让用户能选择本机文件、读取和转换常见文档、联网搜索、运行常用项目命令、让 Agent 总结内容并生成 Markdown 报告。
+
+第二版工具策略可以更激进：工作区只是默认上下文，不做硬沙箱；用户显式传入的路径和命令可以执行。系统只做清晰提示、超时、输出截断和活动日志，不做完整审批引擎、沙箱隔离或复杂权限系统。
 
 ### Phase 3: MCP 工具接入
 
-实现真实 MCP Client Adapter，支持列出工具、资源和提示词。先接文件系统、GitHub、搜索等成熟 MCP Server。
+在本地工具层稳定后，实现真实 MCP Client Adapter，支持列出工具、资源和提示词。先接文件系统、GitHub、搜索等成熟 MCP Server。
 
 ### Phase 4: 长期记忆
 

@@ -1,6 +1,20 @@
+import json
+
 from typer.testing import CliRunner
 
+from easy_claw.agent.runtime import AgentResult
 from easy_claw.cli import app
+from easy_claw.storage.repositories import AuditRepository
+from easy_claw.tools.commands import CommandResult
+from easy_claw.tools.search import SearchResult
+
+
+class FakeConverter:
+    def convert(self, path):
+        class Result:
+            text_content = "# Converted"
+
+        return Result()
 
 
 def test_doctor_command_reports_ok(tmp_path, monkeypatch):
@@ -22,7 +36,8 @@ def test_chat_dry_run_uses_fake_runtime():
     assert "easy-claw dry run: hello" in result.stdout
 
 
-def test_chat_without_model_reports_configuration_error(monkeypatch):
+def test_chat_without_model_reports_configuration_error(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("EASY_CLAW_MODEL", raising=False)
     runner = CliRunner()
 
@@ -30,3 +45,224 @@ def test_chat_without_model_reports_configuration_error(monkeypatch):
 
     assert result.exit_code != 0
     assert "Set EASY_CLAW_MODEL" in result.stdout
+
+
+def test_chat_interactive_reuses_one_session_thread(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
+    captured_requests = []
+
+    class FakeRuntime:
+        def run(self, request):
+            captured_requests.append(request)
+            return AgentResult(
+                content=f"answer: {request.prompt}",
+                thread_id=request.thread_id,
+            )
+
+    monkeypatch.setattr("easy_claw.cli.DeepAgentsRuntime", FakeRuntime)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["chat", "--interactive"],
+        input="hello\ncontinue\nexit\n",
+    )
+
+    assert result.exit_code == 0
+    assert "answer: hello" in result.stdout
+    assert "answer: continue" in result.stdout
+    assert len(captured_requests) == 2
+    assert captured_requests[0].thread_id == captured_requests[1].thread_id
+    sessions = AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
+    assert [log.event_type for log in sessions].count("agent_run") == 2
+
+
+def test_docs_summarize_dry_run_reads_document(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "README.md").write_text("# Project", encoding="utf-8")
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["docs", "summarize", "--dry-run", "README.md"])
+
+    assert result.exit_code == 0
+    assert "README.md" in result.stdout
+    assert "# Project" in result.stdout
+
+
+def test_docs_summarize_uses_runtime_and_writes_output(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
+    (tmp_path / "README.md").write_text("# Project", encoding="utf-8")
+    captured_prompts = []
+
+    class FakeRuntime:
+        def run(self, request):
+            captured_prompts.append(request.prompt)
+            return AgentResult(content="# Summary", thread_id=request.thread_id)
+
+    monkeypatch.setattr("easy_claw.workflows.document_runs.DeepAgentsRuntime", FakeRuntime)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["docs", "summarize", "README.md", "--output", "reports/summary.md"],
+    )
+
+    assert result.exit_code == 0
+    assert "# Summary" in result.stdout
+    assert "# Project" in captured_prompts[0]
+    assert (tmp_path / "reports" / "summary.md").read_text(encoding="utf-8") == "# Summary"
+    events = [
+        log.event_type
+        for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
+    ]
+    assert "document_read" in events
+    assert "agent_run" in events
+    assert "report_written" in events
+
+
+def test_docs_summarize_converts_non_text_documents(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
+    (tmp_path / "report.docx").write_bytes(b"fake")
+    captured_prompts = []
+
+    class FakeRuntime:
+        def run(self, request):
+            captured_prompts.append(request.prompt)
+            return AgentResult(content="# Summary", thread_id=request.thread_id)
+
+    monkeypatch.setattr("easy_claw.workflows.document_runs.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr(
+        "easy_claw.tools.documents._create_markitdown_converter",
+        lambda: FakeConverter(),
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["docs", "summarize", "report.docx"])
+
+    assert result.exit_code == 0
+    assert "# Converted" in captured_prompts[0]
+    events = [
+        log.event_type
+        for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
+    ]
+    assert "document_converted" in events
+
+
+def test_docs_summarize_dry_run_continues_after_unreadable_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "README.md").write_text("# Project", encoding="utf-8")
+    (tmp_path / "bad.txt").write_bytes(b"\xff\xfe\xff")
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["docs", "summarize", "--dry-run", "README.md", "bad.txt"])
+
+    assert result.exit_code == 0
+    assert "# Project" in result.stdout
+    assert "bad.txt" in result.stdout
+
+
+def test_docs_summarize_dry_run_warns_for_outside_workspace_path(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("# Outside", encoding="utf-8")
+    monkeypatch.chdir(workspace)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["docs", "summarize", "--dry-run", str(outside)])
+
+    assert result.exit_code == 0
+    assert "outside workspace" in result.stdout
+    assert "# Outside" in result.stdout
+
+
+def test_tools_search_prints_results(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "easy_claw.cli.search_web",
+        lambda query: [
+            SearchResult(
+                title="DeepSeek Docs",
+                url="https://api-docs.deepseek.com",
+                snippet="Docs",
+            )
+        ],
+        raising=False,
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["tools", "search", "DeepSeek"])
+
+    assert result.exit_code == 0
+    assert "DeepSeek Docs" in result.stdout
+    assert "https://api-docs.deepseek.com" in result.stdout
+    events = [
+        log.event_type
+        for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
+    ]
+    assert "web_search" in events
+
+
+def test_tools_run_prints_command_output(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "easy_claw.cli.run_command",
+        lambda command, cwd: CommandResult(
+            command=command,
+            cwd=cwd,
+            exit_code=0,
+            stdout="hello\n",
+            stderr="",
+            timed_out=False,
+            truncated=False,
+        ),
+        raising=False,
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["tools", "run", "echo hello"])
+
+    assert result.exit_code == 0
+    assert "hello" in result.stdout
+    events = [
+        log
+        for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
+    ]
+    command_log = next(log for log in events if log.event_type == "command_run")
+    payload = json.loads(command_log.payload_json)
+    assert payload["command"] == "echo hello"
+    assert payload["cwd"] == str(tmp_path)
+    assert payload["exit_code"] == 0
+    assert payload["timed_out"] is False
+    assert payload["truncated"] is False
+
+
+def test_tools_python_prints_output(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "easy_claw.cli.run_python_code",
+        lambda code, cwd: CommandResult(
+            command=code,
+            cwd=cwd,
+            exit_code=0,
+            stdout="2\n",
+            stderr="",
+            timed_out=False,
+            truncated=False,
+        ),
+        raising=False,
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["tools", "python", "print(1 + 1)"])
+
+    assert result.exit_code == 0
+    assert "2" in result.stdout
+    events = [
+        log.event_type
+        for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
+    ]
+    assert "python_run" in events

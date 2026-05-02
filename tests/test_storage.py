@@ -1,5 +1,10 @@
 from easy_claw.storage.db import connect_product_db, initialize_product_db
-from easy_claw.storage.repositories import MemoryRepository, SessionRecord, SessionRepository
+from easy_claw.storage.repositories import (
+    AuditRepository,
+    MemoryRepository,
+    SessionRecord,
+    SessionRepository,
+)
 
 
 class FakeConnection:
@@ -69,3 +74,13 @@ def test_memory_repository_round_trips_memory_items(tmp_path):
 
     assert repo.list_memory()[0].id == item.id
     assert repo.list_memory()[0].content == "CLI first"
+
+
+def test_audit_repository_lists_records(tmp_path):
+    db_path = tmp_path / "easy-claw.db"
+    initialize_product_db(db_path)
+    repo = AuditRepository(db_path)
+
+    repo.record(event_type="document_read", payload={"path": "README.md"})
+
+    assert repo.list_logs()[0].event_type == "document_read"
