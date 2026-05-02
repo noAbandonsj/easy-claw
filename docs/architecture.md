@@ -579,15 +579,30 @@ easy-claw/
 - 轻量活动日志，记录读文件、转文档、搜索、命令执行、写报告等关键动作
 - LangGraph interrupt + ConsoleApprovalReviewer 实现文件写入审批
 - 暂不做完整审批引擎、沙箱隔离和复杂权限系统
+- 已知缺口：Agent 输出为同步全量返回，工具调用过程不可见（规划于 v0.3 解决）
 
-### v0.3: MCP
+### v0.3: CLI 流式输出与工具调用显示
+
+v0.2 的工具调用过程对用户是黑盒——Agent 调了什么工具、入参是什么、返回值是什么，全部不可见。v0.3 把 CLI 体验补圆。
+
+核心思路：
+
+- `runtime.py` 中 `agent.invoke()` 改为 `agent.stream(stream_mode="messages")`，逐个 yield LangGraph event
+- 新增 `StreamEvent` 数据类：区分 token 增量（`token`）、工具调用开始（`tool_call_start`）、工具调用结果（`tool_call_result`）、最终消息（`done`）
+- `_invoke_with_approval` 改为生成器，在工具调用事件上仍然触发 interrupt 审批
+- CLI `chat` 命令用 Rich `Live` / `Panel` 实时渲染：token 流逐字输出，工具调用以独立面板穿插显示（工具名、参数、返回值）
+- API 预留 `POST /runs/stream` SSE 端点结构，但 v0.3 不实现 Web 端流式
+
+不依赖 MCP、长期记忆或沙箱，可以紧接着 v0.2 做。
+
+### v0.4: MCP 工具接入
 
 - 真实 MCP Client Adapter
 - 工具列表 UI
-- 工具调用审计
+- 工具调用审计（复用 v0.3 的工具调用显示管道）
 - 文件系统 / GitHub / 搜索 MCP Server 示例
 
-### v0.4: Memory
+### v0.5: Memory
 
 - 完善 MVP 的 SQLite Memory
 - 用户偏好管理
@@ -596,19 +611,20 @@ easy-claw/
 - Mem0 Provider
 - Honcho Provider
 
-### v0.5: Optional Sandbox
+### v0.6: Optional Sandbox
 
 - 可选 Docker Runner
 - 只读挂载和输出目录
 
-### v0.6: LangGraph
+### v0.7: LangGraph 长任务
 
 - 可暂停任务
 - 人审恢复
 - 失败恢复
 - 长任务进度
+- Web UI 流式输出（SSE / WebSocket）
 
-### v0.7: 桌面体验
+### v0.8: 桌面体验
 
 - 桌面壳或安装器
 - 托盘启动
