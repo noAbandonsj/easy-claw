@@ -23,18 +23,18 @@ from easy_claw.workflows.document_runs import NoReadableDocumentsError, run_docu
 
 console = Console()
 DEFAULT_SKILLS_ROOT = Path("skills")
-app = typer.Typer(help="easy-claw local AI agent workbench")
+app = typer.Typer(help="easy-claw — your personal AI assistant for Windows")
 skills_app = typer.Typer(help="Manage Markdown skills")
 memory_app = typer.Typer(help="Manage explicit product memory")
 docs_app = typer.Typer(help="Work with local documents")
 tools_app = typer.Typer(help="Run local power tools")
-app.add_typer(skills_app, name="skills")
-app.add_typer(memory_app, name="memory")
-app.add_typer(docs_app, name="docs")
-app.add_typer(tools_app, name="tools")
+app.add_typer(skills_app, name="skills", rich_help_panel="Advanced")
+app.add_typer(memory_app, name="memory", rich_help_panel="Advanced")
+app.add_typer(docs_app, name="docs", rich_help_panel="Advanced")
+app.add_typer(tools_app, name="tools", rich_help_panel="Advanced")
 
 
-@app.command()
+@app.command(rich_help_panel="Management")
 def doctor() -> None:
     """Print local environment diagnostics."""
     config = load_config()
@@ -48,7 +48,7 @@ def doctor() -> None:
     console.print(f"api_key: {'***' + config.api_key[-4:] if config.api_key else '<not configured>'}")
 
 
-@app.command("init-db")
+@app.command("init-db", rich_help_panel="Management")
 def init_db() -> None:
     """Initialize local product storage."""
     config = load_config()
@@ -79,22 +79,22 @@ def list_memory() -> None:
     console.print(table)
 
 
-@app.command()
+@app.command(rich_help_panel="Management")
 def serve(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8787, "--port"),
 ) -> None:
-    """Start the local FastAPI service."""
+    """Start the local API service (developers only)."""
     uvicorn.run("easy_claw.api.main:app", host=host, port=port)
 
 
-@app.command()
+@app.command(rich_help_panel="Primary")
 def chat(
     prompt: Annotated[str | None, typer.Argument()] = None,
     dry_run: bool = typer.Option(False, "--dry-run"),
     interactive: bool = typer.Option(False, "--interactive", "-i"),
 ) -> None:
-    """Run a chat request. Use --dry-run for deterministic smoke checks."""
+    """Start the interactive AI assistant (run without args for interactive mode)."""
     config = load_config()
     if interactive:
         _run_interactive_chat(dry_run=dry_run)

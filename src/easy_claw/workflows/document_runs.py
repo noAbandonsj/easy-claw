@@ -65,6 +65,8 @@ def run_document_task(
             thread_id=session.id,
             workspace_path=active_workspace,
             model=config.model,
+            base_url=config.base_url,
+            api_key=config.api_key,
             skill_sources=discover_skill_sources(config.cwd / "skills", active_workspace),
             memories=memories,
             checkpoint_db_path=config.checkpoint_db_path,

@@ -28,6 +28,18 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app_config = config or load_config()
     app = FastAPI(title="easy-claw", version="0.1.0")
 
+    @app.get("/")
+    def root() -> dict[str, str]:
+        return {
+            "message": (
+                "easy-claw API is running. This is a developer endpoint — "
+                "use 'uv run easy-claw chat --interactive' in your terminal "
+                "to start the AI assistant."
+            ),
+            "docs": "/docs",
+            "health": "/health",
+        }
+
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}

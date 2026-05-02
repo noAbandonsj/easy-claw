@@ -62,6 +62,8 @@ def test_create_run_requires_prompt_and_documents(tmp_path):
         checkpoint_db_path=tmp_path / "data" / "checkpoints.sqlite",
         default_workspace=tmp_path,
         model=None,
+        base_url="https://api.deepseek.com",
+        api_key="test-key",
     )
     client = TestClient(create_app(config))
 
@@ -78,6 +80,8 @@ def test_create_run_uses_runtime_and_writes_output(tmp_path, monkeypatch):
         checkpoint_db_path=tmp_path / "data" / "checkpoints.sqlite",
         default_workspace=tmp_path,
         model="deepseek-v4-pro",
+        base_url="https://api.deepseek.com",
+        api_key="test-key",
     )
     (tmp_path / "README.md").write_text("# Project", encoding="utf-8")
 
@@ -118,6 +122,8 @@ def test_create_run_converts_non_text_documents(tmp_path, monkeypatch):
         checkpoint_db_path=tmp_path / "data" / "checkpoints.sqlite",
         default_workspace=tmp_path,
         model="deepseek-v4-pro",
+        base_url="https://api.deepseek.com",
+        api_key="test-key",
     )
     (tmp_path / "report.docx").write_bytes(b"fake")
 
@@ -153,6 +159,8 @@ def test_create_run_continues_after_unreadable_document(tmp_path, monkeypatch):
         checkpoint_db_path=tmp_path / "data" / "checkpoints.sqlite",
         default_workspace=tmp_path,
         model="deepseek-v4-pro",
+        base_url="https://api.deepseek.com",
+        api_key="test-key",
     )
     (tmp_path / "README.md").write_text("# Project", encoding="utf-8")
     (tmp_path / "bad.txt").write_bytes(b"\xff\xfe\xff")

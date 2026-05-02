@@ -22,3 +22,9 @@ uv run easy-claw init-db
 
 Write-Host "Starting easy-claw API at http://$HostAddress`:$Port"
 uv run easy-claw serve --host $HostAddress --port $Port
+
+Write-Host ""
+Write-Host "API is running. This is a developer endpoint (Swagger docs at http://$HostAddress`:$Port/docs)."
+Write-Host "To start the interactive AI assistant, open another terminal and run:"
+Write-Host "  uv run easy-claw chat --interactive"
+Write-Host ""
