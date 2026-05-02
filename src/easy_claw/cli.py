@@ -44,6 +44,8 @@ def doctor() -> None:
     console.print(f"checkpoint_db: {config.checkpoint_db_path}")
     console.print(f"workspace: {config.default_workspace}")
     console.print(f"model: {config.model or '<not configured>'}")
+    console.print(f"base_url: {config.base_url}")
+    console.print(f"api_key: {'***' + config.api_key[-4:] if config.api_key else '<not configured>'}")
 
 
 @app.command("init-db")
@@ -133,6 +135,8 @@ def chat(
             thread_id=session.id,
             workspace_path=config.default_workspace,
             model=config.model,
+            base_url=config.base_url,
+            api_key=config.api_key,
             skill_sources=skill_sources,
             memories=memories,
             checkpoint_db_path=config.checkpoint_db_path,
@@ -231,6 +235,8 @@ def _run_interactive_chat(*, dry_run: bool) -> None:
         thread_id=session_id,
         workspace_path=config.default_workspace,
         model=config.model if not dry_run else None,
+        base_url=config.base_url,
+        api_key=config.api_key if not dry_run else None,
         skill_sources=skill_sources,
         memories=memories,
         checkpoint_db_path=config.checkpoint_db_path if not dry_run else None,
@@ -298,6 +304,8 @@ def _agent_request_for_prompt(request: AgentRequest, prompt: str) -> AgentReques
         thread_id=request.thread_id,
         workspace_path=request.workspace_path,
         model=request.model,
+        base_url=request.base_url,
+        api_key=request.api_key,
         skill_sources=request.skill_sources,
         memories=request.memories,
         checkpoint_db_path=request.checkpoint_db_path,

@@ -49,7 +49,25 @@
 - 明显破坏性动作，例如批量删除、覆盖大量文件、格式化磁盘，不作为第二版内置工作流。
 - 不实现强确认、沙箱隔离和细粒度权限管理。
 
-这样做的原因是：当前项目还处于本地个人 MVP 阶段，优先级最高的是跑通“选资料 -> 调工具 -> Agent 整理 -> 输出结果”的闭环。过早做完整安全策略会拖慢工具可用性，安全增强应放到工具层稳定之后再做。
+这样做的原因是：当前项目还处于本地个人 MVP 阶段，优先级最高的是跑通”选资料 -> 调工具 -> Agent 整理 -> 输出结果”的闭环。过早做完整安全策略会拖慢工具可用性，安全增强应放到工具层稳定之后再做。
+
+## 虚拟工作区边界
+
+第二版工具开放策略的工作区约束不是仅靠应用层路径检查实现，更关键的是 deepagents 的 `FilesystemBackend` 虚拟化：
+
+```python
+from deepagents.backends import FilesystemBackend
+
+FilesystemBackend(root_dir=request.workspace_path, virtual_mode=True)
+```
+
+`virtual_mode=True` 的效果：
+
+- Agent 通过 deepagents 内置文件工具进行的所有文件操作（读、写、列表、搜索）被限制在 workspace 根目录内
+- Agent 无法看到或访问 workspace 外部的文件系统路径
+- 不需要额外的应用层沙箱或路径检查来阻止 Agent 越界
+
+用户显式传入的绝对路径（如 `D:\other\doc.pdf`）仍由应用层的 `collect_document_paths()` / `load_workspace_documents()` 处理，标记 `outside_workspace=True` 后继续使用——这部分走的是 easy-claw 自己的文件工具，不经过 deepagents 的 FilesystemBackend。
 
 ## 架构
 
@@ -90,6 +108,40 @@ CLI / FastAPI
 - `easy_claw.cli`：新增 `docs summarize`、`tools search`、`tools run`、`tools python` 命令。
 - `easy_claw.api.main`：新增简单 run/chat API。
 
+## 文档任务 Workflow
+
+`easy_claw/workflows/document_runs.py` 是文档任务的核心编排层，把工具调用串联为完整流程，供 CLI 和 API 共用。
+
+`run_document_task()` 的执行步骤：
+
+1. 调用 `load_workspace_documents()` 收集用户传入的文档路径，读取文本文件、用 MarkItDown 转换二进制文档
+2. 如果无可用文档，抛出 `NoReadableDocumentsError`（附带加载错误详情）
+3. 初始化产品数据库，创建 session 记录（`SessionRepository`）
+4. 加载 Markdown Skills（`discover_skill_sources`）和显式记忆（`MemoryRepository`）
+5. 调用 `build_document_prompt()` 将用户提示和文档 Markdown 内容拼接为完整 prompt
+6. 通过 `DeepAgentsRuntime` 执行 Agent 推理
+7. 可选：调用 `write_markdown_report()` 将结果写入 Markdown 文件
+8. 全程通过 `AuditRepository` 记录活动日志：文档读取、文档转换、Agent 调用、报告写入
+
+返回 `DocumentRunResult`，包含 session_id、thread_id、内容、输出路径、文档错误列表和超出工作区的路径列表。
+
+## DeepAgents 原生 Skills 集成
+
+第二版 Skills 采用双层架构：
+
+- **DeepAgents 原生层**：`DeepAgentsRuntime.open_session()` 调用 `create_deep_agent(skills=list(request.skill_sources))`，由 deepagents SDK 负责 skill 文件的发现、索引和系统提示词注入。easy-claw 不自行拼接 skill 文本到 prompt。
+- **CLI 发现层**：`easy_claw/skills.py` 仅用于 `easy-claw skills list` 命令，解析 Markdown frontmatter（name、description）展示给用户。
+
+`discover_skill_sources()` 负责将本地 skills 目录转换为 DeepAgents 要求的虚拟 backend 路径：
+
+```python
+def discover_skill_sources(skills_root: Path, workspace_root: Path) -> list[str]:
+    # 返回如 ["skills/core/", "skills/user/"]
+    # 路径以 / 开头，对应 FilesystemBackend 的虚拟文件系统
+```
+
+只有位于 workspace 内的 skill 目录才会被传递给 Agent，确保 skill 文件在虚拟工作区内可访问。
+
 ## CLI 体验
 
 推荐新增命令：
@@ -111,6 +163,23 @@ uv run easy-claw tools python ".\scripts\analyze_csv.py"
 5. 把转换后的内容和 `summarize-docs` Skill 一起交给 Agent。
 6. 在控制台输出总结。
 7. 如果传入 `--output`，把结果写入指定 Markdown 文件。
+
+## 交互式对话
+
+CLI 支持交互式对话模式，在同一个 Agent session 和 LangGraph thread 中持续对话：
+
+```powershell
+uv run easy-claw chat --interactive
+```
+
+进入交互模式后：
+
+1. 创建 `DeepAgentSession` 上下文管理器，保持 SQLite checkpoint 连接存活
+2. 每次用户输入复用同一个 `thread_id`，Agent 能记住对话历史
+3. `ConsoleApprovalReviewer` 在每次文件写入操作时询问确认
+4. 输入 `exit`、`quit` 或 `:q` 退出；Ctrl+C 中断当前输入
+
+dry-run 模式也可用于交互测试（`chat --interactive --dry-run`），使用 `FakeAgentRuntime` 不调用模型。
 
 ## API 体验
 

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
-DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 
 @dataclass(frozen=True)
 class AgentRequest:
@@ -14,6 +12,8 @@ class AgentRequest:
     thread_id: str
     workspace_path: Path
     model: str | None
+    base_url: str = "https://api.deepseek.com"
+    api_key: str | None = None
     skill_sources: Sequence[str] = field(default_factory=tuple)
     memories: Sequence[str] = field(default_factory=tuple)
     checkpoint_db_path: Path | None = None
@@ -93,6 +93,8 @@ class DeepAgentsRuntime:
     def open_session(self, request: AgentRequest) -> DeepAgentSession:
         if request.model is None:
             raise RuntimeError("Set EASY_CLAW_MODEL before running chat without --dry-run.")
+        if request.api_key is None:
+            raise RuntimeError("Set EASY_CLAW_API_KEY before running chat without --dry-run.")
         if request.checkpoint_db_path is None:
             raise RuntimeError("checkpoint_db_path is required for DeepAgentsRuntime.")
 
@@ -111,7 +113,7 @@ class DeepAgentsRuntime:
         checkpointer_context = SqliteSaver.from_conn_string(str(request.checkpoint_db_path))
         checkpointer = checkpointer_context.__enter__()
         agent = create_deep_agent(
-            model=_build_deepseek_chat_model(request.model),
+            model=_build_chat_model(request.model, request.base_url, request.api_key),
             system_prompt=system_prompt,
             skills=list(request.skill_sources) or None,
             backend=FilesystemBackend(root_dir=request.workspace_path, virtual_mode=True),
@@ -162,17 +164,13 @@ class DeepAgentSession:
         )
 
 
-def _build_deepseek_chat_model(model: str) -> object:
-    api_key = os.environ.get("DEEPSEEK_API_KEY")
-    if not api_key:
-        raise RuntimeError("Set DEEPSEEK_API_KEY before running chat without --dry-run.")
-
+def _build_chat_model(model: str, base_url: str, api_key: str) -> object:
     from langchain_openai import ChatOpenAI
 
     return ChatOpenAI(
         model=model,
         api_key=api_key,
-        base_url=DEEPSEEK_BASE_URL,
+        base_url=base_url,
     )
 
 

@@ -8,7 +8,7 @@ from easy_claw.agent.runtime import (
     DeepAgentsRuntime,
     FakeAgentRuntime,
     StaticApprovalReviewer,
-    _build_deepseek_chat_model,
+    _build_chat_model,
     _invoke_with_approval,
 )
 
@@ -22,6 +22,8 @@ def test_fake_agent_runtime_returns_deterministic_result(tmp_path):
             thread_id="thread-1",
             workspace_path=tmp_path,
             model=None,
+            base_url="https://api.deepseek.com",
+            api_key=None,
             skill_sources=[],
             memories=[],
         )
@@ -31,20 +33,26 @@ def test_fake_agent_runtime_returns_deterministic_result(tmp_path):
     assert result.thread_id == "thread-1"
 
 
-def test_build_deepseek_chat_model_requires_api_key(monkeypatch):
-    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
-
-    with pytest.raises(RuntimeError, match="DEEPSEEK_API_KEY"):
-        _build_deepseek_chat_model("deepseek-v4-pro")
-
-
-def test_build_deepseek_chat_model_uses_deepseek_endpoint(monkeypatch):
-    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
-
-    model = _build_deepseek_chat_model("deepseek-v4-pro")
+def test_build_chat_model_creates_openai_compatible_model(monkeypatch):
+    model = _build_chat_model(
+        model="deepseek-v4-pro",
+        base_url="https://api.deepseek.com",
+        api_key="test-key",
+    )
 
     assert model.model_name == "deepseek-v4-pro"
     assert str(model.openai_api_base).rstrip("/") == "https://api.deepseek.com"
+
+
+def test_build_chat_model_works_with_custom_base_url(monkeypatch):
+    model = _build_chat_model(
+        model="moonshot-v1-128k",
+        base_url="https://api.moonshot.cn/v1",
+        api_key="test-key",
+    )
+
+    assert model.model_name == "moonshot-v1-128k"
+    assert str(model.openai_api_base).rstrip("/") == "https://api.moonshot.cn/v1"
 
 
 @dataclass
@@ -119,10 +127,9 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
         captured.update(kwargs)
         return FakeDeepAgent()
 
-    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     monkeypatch.setattr(
-        "easy_claw.agent.runtime._build_deepseek_chat_model",
-        lambda model: "deepseek-chat-model",
+        "easy_claw.agent.runtime._build_chat_model",
+        lambda model, base_url, api_key: "chat-model",
     )
     monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
     monkeypatch.setattr("deepagents.backends.FilesystemBackend", FakeBackend)
@@ -133,6 +140,8 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
             thread_id="thread-1",
             workspace_path=tmp_path,
             model="deepseek-v4-pro",
+            base_url="https://api.deepseek.com",
+            api_key="test-key",
             skill_sources=["/skills/core/"],
             memories=["Use Chinese."],
             checkpoint_db_path=tmp_path / "checkpoints.sqlite",
@@ -140,7 +149,7 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
     )
 
     assert result.content == "done"
-    assert captured["model"] == "deepseek-chat-model"
+    assert captured["model"] == "chat-model"
     assert captured["skills"] == ["/skills/core/"]
     assert captured["backend_root_dir"] == tmp_path
     assert captured["backend_virtual_mode"] is True
@@ -173,8 +182,8 @@ def test_deepagents_session_reuses_agent_between_turns(tmp_path, monkeypatch):
         return captured["agent"]
 
     monkeypatch.setattr(
-        "easy_claw.agent.runtime._build_deepseek_chat_model",
-        lambda model: "deepseek-chat-model",
+        "easy_claw.agent.runtime._build_chat_model",
+        lambda model, base_url, api_key: "chat-model",
     )
     monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
     monkeypatch.setattr("deepagents.backends.FilesystemBackend", FakeBackend)
@@ -186,6 +195,8 @@ def test_deepagents_session_reuses_agent_between_turns(tmp_path, monkeypatch):
             thread_id="thread-1",
             workspace_path=tmp_path,
             model="deepseek-v4-pro",
+            base_url="https://api.deepseek.com",
+            api_key="test-key",
             checkpoint_db_path=tmp_path / "checkpoints.sqlite",
         )
     ) as session:

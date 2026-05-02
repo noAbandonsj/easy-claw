@@ -1,6 +1,8 @@
 # easy-claw 第一版 MVP 思路
 
-本文档用于暂存 easy-claw 第一版的产品和技术思路，后续再把稳定内容合并进 `README.md` 和 `docs/architecture.md`。
+> **历史文档**：本文档为 2026-05-01 的早期思路草稿，其中大部分技术选型（LangChain `create_agent`、`FileManagementToolkit`、`SQLModel`、开发者模式 Shell 等）已被 v0.2 实际实现取代。当前架构见 `docs/architecture.md`。
+
+本文档保留原始内容以供参考，后续不再更新。
 
 ## 核心判断
 

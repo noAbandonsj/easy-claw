@@ -16,6 +16,8 @@ class AppConfig:
     checkpoint_db_path: Path
     default_workspace: Path
     model: str | None
+    base_url: str
+    api_key: str | None
 
 
 def _read_path(value: str | None, default: Path) -> Path:
@@ -41,11 +43,18 @@ def load_config(
     data_dir = _read_path(values.get("EASY_CLAW_DATA_DIR"), current_dir / "data")
     default_workspace = _read_path(values.get("EASY_CLAW_WORKSPACE"), current_dir)
 
+    model = values.get("EASY_CLAW_MODEL") or None
+    base_url = values.get("EASY_CLAW_BASE_URL") or "https://api.deepseek.com"
+    # Backward compat: fall back to DEEPSEEK_API_KEY if EASY_CLAW_API_KEY not set
+    api_key = values.get("EASY_CLAW_API_KEY") or values.get("DEEPSEEK_API_KEY") or None
+
     return AppConfig(
         cwd=current_dir,
         data_dir=data_dir,
         product_db_path=data_dir / "easy-claw.db",
         checkpoint_db_path=data_dir / "checkpoints.sqlite",
         default_workspace=default_workspace,
-        model=values.get("EASY_CLAW_MODEL") or None,
+        model=model,
+        base_url=base_url,
+        api_key=api_key,
     )

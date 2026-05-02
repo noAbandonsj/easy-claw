@@ -1,5 +1,9 @@
 # easy-claw First Version Design
 
+> **Historical document** — This is the original 2026-05-01 design draft. Much of the technical direction (LangChain `create_agent` fallback, `FileManagementToolkit`, developer-mode gating, 3-level approval system) has been superseded by the v0.2 implementation. See `docs/architecture.md` for the current architecture.
+>
+> Retained for reference only.
+
 Date: 2026-05-01
 
 ## Decision
