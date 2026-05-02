@@ -8,6 +8,132 @@ easy-claw 是一个 Windows 优先、易部署、不重复造轮子的个人 AI 
 
 easy-claw 的目标用户不是要运营多租户 AI 平台的团队，而是在自己电脑上处理文档、代码、资料、文件和日常自动化的个人用户。
 
+## 快速开始
+
+当前第一版是 **CLI 优先 + FastAPI API 底座**。浏览器里的 `/docs` 是接口文档，不是聊天界面；Web UI 会在后续版本实现。
+
+### 1. 准备环境
+
+需要先安装：
+
+- Python 3.11+
+- Git
+- [uv](https://docs.astral.sh/uv/)
+
+进入项目目录：
+
+```powershell
+cd D:\Pathon\Programs\easy-claw
+```
+
+同步依赖：
+
+```powershell
+uv sync
+```
+
+### 2. 配置 `.env`
+
+复制环境变量模板：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+编辑 `.env`，至少配置模型。使用 OpenAI 模型时，还需要配置 `OPENAI_API_KEY`：
+
+```env
+EASY_CLAW_MODEL=openai:gpt-4.1-mini
+OPENAI_API_KEY=你的 API Key
+```
+
+也可以不写 `.env`，直接在当前 PowerShell 会话中设置环境变量：
+
+```powershell
+$env:EASY_CLAW_MODEL = "openai:gpt-4.1-mini"
+$env:OPENAI_API_KEY = "你的 API Key"
+```
+
+进程环境变量优先级高于 `.env` 文件。
+
+### 3. 初始化数据库
+
+```powershell
+uv run easy-claw init-db
+```
+
+默认会创建产品数据库：
+
+```text
+data/easy-claw.db
+```
+
+`data/checkpoints.sqlite` 会在真实 Agent 对话需要 LangGraph checkpoint 时自动创建。
+
+### 4. 启动本地 API 服务
+
+推荐使用一键脚本：
+
+```powershell
+.\scripts\start.ps1
+```
+
+脚本会执行：
+
+1. `uv sync`
+2. `uv run easy-claw init-db`
+3. `uv run easy-claw serve --host 127.0.0.1 --port 8787`
+
+也可以手动启动：
+
+```powershell
+uv run easy-claw serve
+```
+
+启动后打开：
+
+- 健康检查：[http://127.0.0.1:8787/health](http://127.0.0.1:8787/health)
+- API 文档：[http://127.0.0.1:8787/docs](http://127.0.0.1:8787/docs)
+- 会话列表：[http://127.0.0.1:8787/sessions](http://127.0.0.1:8787/sessions)
+
+根路径 `http://127.0.0.1:8787/` 当前返回 `Not Found` 是正常的，因为第一版还没有 Web UI。
+
+## CLI 使用
+
+CLI 在 PowerShell 里使用，不是在浏览器里使用。
+
+诊断当前配置：
+
+```powershell
+uv run easy-claw doctor
+```
+
+不用模型也可以跑 dry-run：
+
+```powershell
+uv run easy-claw chat --dry-run "你好，介绍一下这个项目"
+```
+
+真实对话：
+
+```powershell
+uv run easy-claw chat "请总结这个项目的 README"
+```
+
+当前第一版的 `chat` 是一次命令一次请求，不是持续交互式 REPL。需要连续提问时，重复执行 `easy-claw chat` 命令即可。
+
+列出内置 Markdown Skills：
+
+```powershell
+uv run easy-claw skills list
+```
+
+列出显式产品记忆：
+
+```powershell
+uv run easy-claw memory list
+```
+
 ## 项目定位
 
 easy-claw 应该更像一个“个人工作台”，而不是一个后端系统：

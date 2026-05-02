@@ -29,13 +29,46 @@ def _read_path(value: str | None, default: Path) -> Path:
     return Path(value).expanduser()
 
 
+def _read_dotenv(dotenv_path: Path) -> dict[str, str]:
+    if not dotenv_path.exists():
+        return {}
+
+    values: dict[str, str] = {}
+    for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            values[key] = value
+    return values
+
+
+def _merge_env(process_env: Mapping[str, str], dotenv_values: Mapping[str, str]) -> dict[str, str]:
+    merged = dict(dotenv_values)
+    merged.update(process_env)
+    return merged
+
+
+def _export_dotenv_defaults(dotenv_values: Mapping[str, str]) -> None:
+    for key, value in dotenv_values.items():
+        if value and key not in os.environ:
+            os.environ[key] = value
+
+
 def load_config(
     *,
     cwd: Path | None = None,
     env: Mapping[str, str] | None = None,
 ) -> AppConfig:
     current_dir = (cwd or Path.cwd()).resolve()
-    values = env or os.environ
+    process_env = env or os.environ
+    dotenv_values = _read_dotenv(current_dir / ".env")
+    if env is None:
+        _export_dotenv_defaults(dotenv_values)
+    values = _merge_env(process_env, dotenv_values)
 
     data_dir = _read_path(values.get("EASY_CLAW_DATA_DIR"), current_dir / "data")
     default_workspace = _read_path(values.get("EASY_CLAW_WORKSPACE"), current_dir)
