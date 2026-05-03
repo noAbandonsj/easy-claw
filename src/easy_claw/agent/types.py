@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 CleanupCallback = Callable[[], None]
+InterruptPolicy = dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,7 @@ class ToolContext:
 class ToolBundle:
     tools: list[object] = field(default_factory=list)
     cleanup: Sequence[CleanupCallback] = field(default_factory=tuple)
+    interrupt_on: InterruptPolicy = field(default_factory=dict)
 
     def close(self) -> None:
         for callback in self.cleanup:

@@ -59,17 +59,17 @@ def test_build_chat_model_works_with_custom_base_url(monkeypatch):
 
 
 def test_build_interrupt_on_defaults_permissive_to_no_interrupts():
-    assert _build_interrupt_on("permissive") == {}
+    assert _build_interrupt_on(
+        "permissive",
+        {"run_command": True, "custom_risky_tool": True},
+    ) == {}
 
 
-def test_build_interrupt_on_balanced_keeps_human_approval_for_risky_tools():
-    assert set(_build_interrupt_on("balanced")) == {
-        "edit_file",
-        "write_file",
-        "run_command",
-        "run_python",
-        "write_report",
-    }
+def test_build_interrupt_on_balanced_uses_tool_bundle_policy():
+    assert _build_interrupt_on(
+        "balanced",
+        {"run_command": True, "custom_risky_tool": True},
+    ) == {"run_command": True, "custom_risky_tool": True}
 
 
 @dataclass
@@ -208,6 +208,7 @@ def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkey
             {
                 "tools": [fake_browser_tool],
                 "cleanup": (lambda: cleanup_calls.append("cleanup"),),
+                "interrupt_on": {"custom_risky_tool": True},
             },
         )()
 
@@ -231,6 +232,7 @@ def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkey
             base_url="https://api.deepseek.com",
             api_key="test-key",
             checkpoint_db_path=tmp_path / "checkpoints.sqlite",
+            approval_mode="balanced",
             browser_enabled=True,
             browser_headless=True,
         )
@@ -243,6 +245,7 @@ def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkey
     assert captured["tool_context"].browser_enabled is True
     assert captured["tool_context"].browser_headless is True
     assert fake_browser_tool in captured["tools"]
+    assert captured["interrupt_on"] == {"custom_risky_tool": True}
     assert cleanup_calls == ["cleanup"]
 
 

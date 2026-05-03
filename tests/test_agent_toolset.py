@@ -18,6 +18,13 @@ def test_build_easy_claw_tools_returns_core_tools_without_browser(tmp_path):
         "read_document",
         "write_report",
     ]
+    assert bundle.interrupt_on == {
+        "edit_file": True,
+        "write_file": True,
+        "run_command": True,
+        "run_python": True,
+        "write_report": True,
+    }
     assert bundle.cleanup == ()
 
 
@@ -31,7 +38,11 @@ def test_build_easy_claw_tools_adds_browser_tools_and_cleanup(tmp_path, monkeypa
         return type(
             "FakeToolBundle",
             (),
-            {"tools": [browser_tool], "cleanup": (lambda: closed.append("browser"),)},
+            {
+                "tools": [browser_tool],
+                "cleanup": (lambda: closed.append("browser"),),
+                "interrupt_on": {"browser_navigate": True},
+            },
         )()
 
     monkeypatch.setattr("easy_claw.agent.toolset.build_browser_tools", fake_build_browser_tools)
@@ -46,6 +57,7 @@ def test_build_easy_claw_tools_adds_browser_tools_and_cleanup(tmp_path, monkeypa
     )
 
     assert browser_tool in bundle.tools
+    assert bundle.interrupt_on["browser_navigate"] is True
     assert len(bundle.cleanup) == 1
 
     bundle.close()

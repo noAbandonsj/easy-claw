@@ -4,11 +4,25 @@ from pathlib import Path
 
 from langchain_core.tools import tool
 
+from easy_claw.agent.types import ToolBundle
 from easy_claw.tools.commands import run_command as _run_command
 from easy_claw.tools.documents import read_workspace_document as _read_workspace_document
 from easy_claw.tools.python_runner import run_python_code as _run_python_code
 from easy_claw.tools.reports import write_markdown_report as _write_markdown_report
 from easy_claw.tools.search import search_web as _search_web
+
+CORE_INTERRUPT_ON = {
+    "run_command": True,
+    "run_python": True,
+    "write_report": True,
+}
+
+
+def build_core_tool_bundle(*, workspace_path: Path, cwd: Path) -> ToolBundle:
+    return ToolBundle(
+        tools=build_core_tools(workspace_path=workspace_path, cwd=cwd),
+        interrupt_on=dict(CORE_INTERRUPT_ON),
+    )
 
 
 def build_core_tools(*, workspace_path: Path, cwd: Path) -> list[object]:

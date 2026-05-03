@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -131,7 +131,7 @@ class DeepAgentsRuntime:
                 browser_headless=request.browser_headless,
             )
         )
-        interrupt_on = _build_interrupt_on(request.approval_mode)
+        interrupt_on = _build_interrupt_on(request.approval_mode, tool_bundle.interrupt_on)
 
         checkpointer_context = SqliteSaver.from_conn_string(str(request.checkpoint_db_path))
         checkpointer = checkpointer_context.__enter__()
@@ -214,18 +214,15 @@ def _build_chat_model(model: str, base_url: str, api_key: str) -> object:
     )
 
 
-def _build_interrupt_on(approval_mode: str) -> dict[str, bool]:
+def _build_interrupt_on(
+    approval_mode: str,
+    tool_interrupt_on: Mapping[str, object],
+) -> dict[str, object]:
     mode = approval_mode.strip().lower()
     if mode == "permissive":
         return {}
     if mode in {"balanced", "strict"}:
-        return {
-            "edit_file": True,
-            "write_file": True,
-            "run_command": True,
-            "run_python": True,
-            "write_report": True,
-        }
+        return dict(tool_interrupt_on)
     return {}
 
 
