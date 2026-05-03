@@ -70,6 +70,8 @@ def run_document_task(
             skill_sources=discover_skill_sources(config.cwd / "skills", active_workspace),
             memories=memories,
             checkpoint_db_path=config.checkpoint_db_path,
+            approval_mode=config.approval_mode,
+            execution_mode=config.execution_mode,
         )
     )
     audit_repo.record(

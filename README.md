@@ -79,10 +79,10 @@ uv run easy-claw doctor
 | 代码片段 | "用 Python 读取 data/config.json 并打印所有 key" |
 | 命令执行 | "列出当前目录下所有 Python 文件" |
 
-如果只是想看文档内容但不调用模型：
+如果只是想调试底层文档读取能力但不调用模型，可以使用开发者入口：
 
 ```powershell
-uv run easy-claw docs summarize README.md --dry-run
+uv run easy-claw dev docs summarize README.md --dry-run
 ```
 
 如果用 `--dry-run` 测试对话：
@@ -113,46 +113,48 @@ uv run easy-claw chat --dry-run "你好"
 | `init-db` | 初始化本地 SQLite 数据库 |
 | `serve` | 启动 FastAPI 服务（开发者向） |
 
-### Advanced — 高级命令
+### Dev — 开发者调试命令
 
-这些命令提供快捷操作方式，跳过对话循环直接执行特定任务。你在交互式 chat 里用自然语言同样可以完成这些操作。
+这些命令只用于调试底层能力。普通用户不需要记忆这些入口；在交互式 `chat` 里用自然语言同样可以完成这些操作。
 
 #### `docs summarize` — 文档总结
 
 ```powershell
-uv run easy-claw docs summarize README.md
-uv run easy-claw docs summarize docs --output reports/summary.md
+uv run easy-claw dev docs summarize README.md
+uv run easy-claw dev docs summarize docs --output reports/summary.md
 ```
 
 #### `tools search` — 联网搜索
 
 ```powershell
-uv run easy-claw tools search "DeepSeek API function calling"
+uv run easy-claw dev tools search "DeepSeek API function calling"
 ```
 
 #### `tools run` — 执行命令
 
 ```powershell
-uv run easy-claw tools run "pytest -q"
+uv run easy-claw dev tools run "pytest -q"
 ```
 
 #### `tools python` — 执行 Python 片段
 
 ```powershell
-uv run easy-claw tools python "print('hello from easy-claw')"
+uv run easy-claw dev tools python "print('hello from easy-claw')"
 ```
 
 #### `skills list` — 查看技能
 
 ```powershell
-uv run easy-claw skills list
+uv run easy-claw dev skills list
 ```
 
 #### `memory list` — 查看记忆
 
 ```powershell
-uv run easy-claw memory list
+uv run easy-claw dev memory list
 ```
+
+旧的 `docs`、`tools`、`skills`、`memory` 顶层入口暂时保留为隐藏兼容命令，但不再作为普通用户主线。
 
 ---
 
@@ -190,10 +192,31 @@ v0.3 已实现可用的终端交互式助手和交互式流式输出，但以下
 
 - **没有 Web UI**：交互式对话只在终端中进行，`serve` 启动后没有聊天界面
 - **单用户本地运行**：没有多用户、多租户支持
-- **工具执行无沙箱**：文件操作和命令执行在本地直接运行，高风险操作会请求人工确认
+- **工具执行无沙箱**：默认 `EASY_CLAW_APPROVAL_MODE=permissive`，优先保证可用性；本地命令、Python 和报告写入会直接运行并记录审计日志
 - **暂无 MCP Server 接入**：工具集为内置实现，尚未对接外部 MCP Server
 - **暂无长期记忆 Provider**：记忆存储在本地 SQLite，未接入 Mem0 或 Honcho
 - **流式范围有限**：`chat --interactive` 支持流式输出和工具调用显示；`docs summarize`、API `/runs` 和 Web UI 尚未实现流式输出
+
+---
+
+## 执行与审批模式
+
+默认配置偏向个人助手的可用性：
+
+```env
+EASY_CLAW_APPROVAL_MODE=permissive
+EASY_CLAW_EXECUTION_MODE=local
+```
+
+`permissive` 模式下，Agent 在对话中可以直接调用本地工具执行常规任务，例如运行 `pytest`、读取文件、执行临时 Python 片段和写 Markdown 报告。命令仍然有工作目录、超时、输出截断和审计日志，但不会默认弹出人工确认。
+
+如果你希望恢复更谨慎的行为，可以设置：
+
+```env
+EASY_CLAW_APPROVAL_MODE=balanced
+```
+
+`balanced` / `strict` 会对命令执行、Python 执行和文件写入启用人工确认。
 
 ---
 
@@ -203,7 +226,7 @@ v0.3 已实现可用的终端交互式助手和交互式流式输出，但以下
 - **Local first**：默认本机运行，SQLite 存储，无需云服务。
 - **uv managed**：依赖管理、虚拟环境和命令入口统一由 `uv` 处理。
 - **Reuse first**：Agent 编排复用 LangChain/LangGraph，不自行实现编排引擎。
-- **Human approval first**：高风险操作（文件写入、命令执行）默认需人工确认。
+- **Usability first**：默认优先可用性，让 Agent 能主动读文件、运行测试、执行 Python 和写报告；需要更谨慎时可切换审批模式。
 
 ---
 

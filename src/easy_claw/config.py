@@ -18,6 +18,8 @@ class AppConfig:
     model: str | None
     base_url: str
     api_key: str | None
+    approval_mode: str = "permissive"
+    execution_mode: str = "local"
 
 
 def _read_path(value: str | None, default: Path) -> Path:
@@ -47,6 +49,8 @@ def load_config(
     base_url = values.get("EASY_CLAW_BASE_URL") or "https://api.deepseek.com"
     # Backward compat: fall back to DEEPSEEK_API_KEY if EASY_CLAW_API_KEY not set
     api_key = values.get("EASY_CLAW_API_KEY") or values.get("DEEPSEEK_API_KEY") or None
+    approval_mode = (values.get("EASY_CLAW_APPROVAL_MODE") or "permissive").strip().lower()
+    execution_mode = (values.get("EASY_CLAW_EXECUTION_MODE") or "local").strip().lower()
 
     return AppConfig(
         cwd=current_dir,
@@ -57,4 +61,6 @@ def load_config(
         model=model,
         base_url=base_url,
         api_key=api_key,
+        approval_mode=approval_mode,
+        execution_mode=execution_mode,
     )

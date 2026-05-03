@@ -154,8 +154,7 @@ def test_chat_interactive_uses_stream_when_session_supports_it(tmp_path, monkeyp
     assert "stream: hello" in result.stdout
     assert prompts == ["hello"]
     events = [
-        log.event_type
-        for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
+        log.event_type for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
     ]
     assert events.count("agent_run") == 1
 
@@ -196,8 +195,7 @@ def test_docs_summarize_uses_runtime_and_writes_output(tmp_path, monkeypatch):
     assert "# Project" in captured_prompts[0]
     assert (tmp_path / "reports" / "summary.md").read_text(encoding="utf-8") == "# Summary"
     events = [
-        log.event_type
-        for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
+        log.event_type for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
     ]
     assert "document_read" in events
     assert "agent_run" in events
@@ -227,8 +225,7 @@ def test_docs_summarize_converts_non_text_documents(tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert "# Converted" in captured_prompts[0]
     events = [
-        log.event_type
-        for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
+        log.event_type for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
     ]
     assert "document_converted" in events
 
@@ -282,8 +279,7 @@ def test_tools_search_prints_results(tmp_path, monkeypatch):
     assert "DeepSeek Docs" in result.stdout
     assert "https://api-docs.deepseek.com" in result.stdout
     events = [
-        log.event_type
-        for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
+        log.event_type for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
     ]
     assert "web_search" in events
 
@@ -309,10 +305,7 @@ def test_tools_run_prints_command_output(tmp_path, monkeypatch):
 
     assert result.exit_code == 0
     assert "hello" in result.stdout
-    events = [
-        log
-        for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
-    ]
+    events = [log for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()]
     command_log = next(log for log in events if log.event_type == "command_run")
     payload = json.loads(command_log.payload_json)
     assert payload["command"] == "echo hello"
@@ -320,6 +313,29 @@ def test_tools_run_prints_command_output(tmp_path, monkeypatch):
     assert payload["exit_code"] == 0
     assert payload["timed_out"] is False
     assert payload["truncated"] is False
+
+
+def test_dev_tools_run_prints_command_output(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "easy_claw.cli.run_command",
+        lambda command, cwd: CommandResult(
+            command=command,
+            cwd=cwd,
+            exit_code=0,
+            stdout="hello\n",
+            stderr="",
+            timed_out=False,
+            truncated=False,
+        ),
+        raising=False,
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["dev", "tools", "run", "echo hello"])
+
+    assert result.exit_code == 0
+    assert "hello" in result.stdout
 
 
 def test_tools_python_prints_output(tmp_path, monkeypatch):
@@ -344,7 +360,6 @@ def test_tools_python_prints_output(tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert "2" in result.stdout
     events = [
-        log.event_type
-        for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
+        log.event_type for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
     ]
     assert "python_run" in events

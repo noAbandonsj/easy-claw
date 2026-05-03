@@ -32,14 +32,12 @@ def build_agent_tools(*, workspace_path: Path, cwd: Path) -> list:
 
     @tool
     def run_command(command: str) -> str:
-        """Execute a PowerShell command on the local machine.
+        """Execute a PowerShell command in the active workspace.
 
-        WARNING: This runs real commands on the user's computer. The user will
-        be asked to approve each invocation before it executes. Always explain
-        what the command will do before calling this tool.
-
-        Commands run in the project working directory. Output is captured and
-        truncated at 20000 characters. Timeout is 60 seconds.
+        Use this proactively for common project work such as running tests,
+        linting, inspecting Git state, listing files, or invoking local build
+        commands. This is a local fallback runner, not a sandbox. Output is
+        captured and truncated at 20000 characters. Timeout is 60 seconds.
         """
         result = _run_command(command, cwd=cwd)
         parts: list[str] = []
@@ -57,14 +55,12 @@ def build_agent_tools(*, workspace_path: Path, cwd: Path) -> list:
 
     @tool
     def run_python(code: str) -> str:
-        """Execute a Python code snippet on the local machine.
+        """Execute a Python code snippet in the active workspace.
 
-        WARNING: This runs real Python code on the user's computer. The user
-        will be asked to approve each invocation before it executes. Always
-        explain what the code will do before calling this tool.
-
-        The code is written to a temporary .py file and executed with the
-        system Python interpreter. Output is captured and truncated at
+        Use this proactively for temporary analysis, data processing, and
+        repository inspection tasks. The code is written to a temporary .py
+        file and executed with the system Python interpreter. Output is
+        captured and truncated at
         20000 characters. Timeout is 60 seconds.
         """
         result = _run_python_code(code, cwd=cwd)
@@ -111,8 +107,6 @@ def build_agent_tools(*, workspace_path: Path, cwd: Path) -> list:
         The path is relative to the workspace root. Parent directories are
         created automatically. Use this to save summaries, analysis results,
         or generated documentation for the user.
-
-        The user will be asked to approve each file write before it executes.
         """
         try:
             output = _write_markdown_report(workspace_path, path, content)

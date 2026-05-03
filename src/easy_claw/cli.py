@@ -32,15 +32,21 @@ from easy_claw.workflows.document_runs import NoReadableDocumentsError, run_docu
 console = Console()
 DEFAULT_SKILLS_ROOT = Path("skills")
 STREAM_PANEL_VALUE_LIMIT = 1200
-app = typer.Typer(help="easy-claw — your personal AI assistant for Windows")
+app = typer.Typer(help="easy-claw - your personal AI assistant for Windows")
+dev_app = typer.Typer(help="Developer and debugging commands")
 skills_app = typer.Typer(help="Manage Markdown skills")
 memory_app = typer.Typer(help="Manage explicit product memory")
 docs_app = typer.Typer(help="Work with local documents")
 tools_app = typer.Typer(help="Run local power tools")
-app.add_typer(skills_app, name="skills", rich_help_panel="Advanced")
-app.add_typer(memory_app, name="memory", rich_help_panel="Advanced")
-app.add_typer(docs_app, name="docs", rich_help_panel="Advanced")
-app.add_typer(tools_app, name="tools", rich_help_panel="Advanced")
+app.add_typer(dev_app, name="dev", rich_help_panel="Development")
+dev_app.add_typer(skills_app, name="skills")
+dev_app.add_typer(memory_app, name="memory")
+dev_app.add_typer(docs_app, name="docs")
+dev_app.add_typer(tools_app, name="tools")
+app.add_typer(skills_app, name="skills", hidden=True, deprecated=True)
+app.add_typer(memory_app, name="memory", hidden=True, deprecated=True)
+app.add_typer(docs_app, name="docs", hidden=True, deprecated=True)
+app.add_typer(tools_app, name="tools", hidden=True, deprecated=True)
 
 
 @app.command(rich_help_panel="Management")
@@ -54,6 +60,8 @@ def doctor() -> None:
     console.print(f"workspace: {config.default_workspace}")
     console.print(f"model: {config.model or '<not configured>'}")
     console.print(f"base_url: {config.base_url}")
+    console.print(f"approval_mode: {config.approval_mode}")
+    console.print(f"execution_mode: {config.execution_mode}")
     api_key_display = "***" + config.api_key[-4:] if config.api_key else "<not configured>"
     console.print(f"api_key: {api_key_display}")
 
@@ -150,6 +158,8 @@ def chat(
             skill_sources=skill_sources,
             memories=memories,
             checkpoint_db_path=config.checkpoint_db_path,
+            approval_mode=config.approval_mode,
+            execution_mode=config.execution_mode,
         )
     )
     audit_repo.record(
@@ -234,9 +244,7 @@ def _run_interactive_chat(*, dry_run: bool) -> None:
         )
         session_id = session.id
         skill_sources = discover_skill_sources(config.cwd / "skills", config.default_workspace)
-        memories = [
-            item.content for item in MemoryRepository(config.product_db_path).list_memory()
-        ]
+        memories = [item.content for item in MemoryRepository(config.product_db_path).list_memory()]
         runtime = DeepAgentsRuntime()
 
     console.print("Interactive chat started. Type exit or quit to leave.")
@@ -250,6 +258,8 @@ def _run_interactive_chat(*, dry_run: bool) -> None:
         skill_sources=skill_sources,
         memories=memories,
         checkpoint_db_path=config.checkpoint_db_path if not dry_run else None,
+        approval_mode=config.approval_mode,
+        execution_mode=config.execution_mode,
     )
     if dry_run:
         _run_interactive_loop(
@@ -326,6 +336,8 @@ def _agent_request_for_prompt(request: AgentRequest, prompt: str) -> AgentReques
         skill_sources=request.skill_sources,
         memories=request.memories,
         checkpoint_db_path=request.checkpoint_db_path,
+        approval_mode=request.approval_mode,
+        execution_mode=request.execution_mode,
     )
 
 
@@ -466,8 +478,6 @@ def _print_document_load_notices(load_result: DocumentLoadResult) -> None:
             console.print(f"outside workspace document: {document.relative_path}")
     for error in load_result.errors:
         prefix = (
-            "outside workspace document failed"
-            if error.outside_workspace
-            else "document failed"
+            "outside workspace document failed" if error.outside_workspace else "document failed"
         )
         console.print(f"{prefix}: {error.path} - {error.message}")

@@ -5,12 +5,16 @@ from easy_claw.config import load_config
 
 def test_load_config_uses_local_data_dir(tmp_path, monkeypatch):
     monkeypatch.delenv("EASY_CLAW_DATA_DIR", raising=False)
+    monkeypatch.delenv("EASY_CLAW_APPROVAL_MODE", raising=False)
+    monkeypatch.delenv("EASY_CLAW_EXECUTION_MODE", raising=False)
 
     config = load_config(cwd=tmp_path)
 
     assert config.data_dir == tmp_path / "data"
     assert config.product_db_path == tmp_path / "data" / "easy-claw.db"
     assert config.checkpoint_db_path == tmp_path / "data" / "checkpoints.sqlite"
+    assert config.approval_mode == "permissive"
+    assert config.execution_mode == "local"
 
 
 def test_load_config_reads_env_overrides(tmp_path, monkeypatch):
@@ -21,6 +25,8 @@ def test_load_config_reads_env_overrides(tmp_path, monkeypatch):
     monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
     monkeypatch.setenv("EASY_CLAW_BASE_URL", "https://api.example.com")
     monkeypatch.setenv("EASY_CLAW_API_KEY", "sk-test")
+    monkeypatch.setenv("EASY_CLAW_APPROVAL_MODE", "balanced")
+    monkeypatch.setenv("EASY_CLAW_EXECUTION_MODE", "local")
 
     config = load_config(cwd=tmp_path)
 
@@ -29,6 +35,8 @@ def test_load_config_reads_env_overrides(tmp_path, monkeypatch):
     assert config.model == "deepseek-v4-pro"
     assert config.base_url == "https://api.example.com"
     assert config.api_key == "sk-test"
+    assert config.approval_mode == "balanced"
+    assert config.execution_mode == "local"
 
 
 def test_load_config_defaults_base_url_to_deepseek(tmp_path, monkeypatch):
@@ -83,9 +91,7 @@ def test_load_config_easy_claw_api_key_takes_priority_over_deepseek(tmp_path, mo
     assert config.api_key == "from-easy-claw"
 
 
-def test_load_config_exports_dotenv_values_for_provider_libraries(
-    tmp_path, monkeypatch
-):
+def test_load_config_exports_dotenv_values_for_provider_libraries(tmp_path, monkeypatch):
     monkeypatch.delenv("EASY_CLAW_API_KEY", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     (tmp_path / ".env").write_text(

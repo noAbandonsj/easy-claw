@@ -20,6 +20,8 @@ class AgentRequest:
     skill_sources: Sequence[str] = field(default_factory=tuple)
     memories: Sequence[str] = field(default_factory=tuple)
     checkpoint_db_path: Path | None = None
+    approval_mode: str = "permissive"
+    execution_mode: str = "local"
 
 
 @dataclass(frozen=True)
@@ -122,13 +124,7 @@ class DeepAgentsRuntime:
             workspace_path=request.workspace_path,
             cwd=request.workspace_path,
         )
-        interrupt_on = {
-            "edit_file": True,
-            "write_file": True,
-            "run_command": True,
-            "run_python": True,
-            "write_report": True,
-        }
+        interrupt_on = _build_interrupt_on(request.approval_mode)
 
         checkpointer_context = SqliteSaver.from_conn_string(str(request.checkpoint_db_path))
         checkpointer = checkpointer_context.__enter__()
@@ -204,11 +200,29 @@ def _build_chat_model(model: str, base_url: str, api_key: str) -> object:
     )
 
 
+def _build_interrupt_on(approval_mode: str) -> dict[str, bool]:
+    mode = approval_mode.strip().lower()
+    if mode == "permissive":
+        return {}
+    if mode in {"balanced", "strict"}:
+        return {
+            "edit_file": True,
+            "write_file": True,
+            "run_command": True,
+            "run_python": True,
+            "write_report": True,
+        }
+    return {}
+
+
 def _build_system_prompt(memories: Sequence[str]) -> str:
     sections = [
-        "You are easy-claw, a Windows-first local personal AI workbench.",
-        "Operate only inside the selected workspace unless the user explicitly approves otherwise.",
-        "Do not execute commands or write files without human approval.",
+        "You are easy-claw, an agent-first Windows personal code assistant.",
+        "The user should describe tasks naturally; do not ask them to manually run "
+        "docs/tools/dev commands.",
+        "Use available tools proactively to read files, run tests, inspect projects, "
+        "search, and write reports.",
+        "Operate inside the selected workspace unless the user explicitly asks for another path.",
     ]
     if memories:
         sections.append(

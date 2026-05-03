@@ -10,6 +10,7 @@ from easy_claw.agent.runtime import (
     StaticApprovalReviewer,
     StreamEvent,
     _build_chat_model,
+    _build_interrupt_on,
     _events_from_stream_item,
     _invoke_with_approval,
 )
@@ -55,6 +56,20 @@ def test_build_chat_model_works_with_custom_base_url(monkeypatch):
 
     assert model.model_name == "moonshot-v1-128k"
     assert str(model.openai_api_base).rstrip("/") == "https://api.moonshot.cn/v1"
+
+
+def test_build_interrupt_on_defaults_permissive_to_no_interrupts():
+    assert _build_interrupt_on("permissive") == {}
+
+
+def test_build_interrupt_on_balanced_keeps_human_approval_for_risky_tools():
+    assert set(_build_interrupt_on("balanced")) == {
+        "edit_file",
+        "write_file",
+        "run_command",
+        "run_python",
+        "write_report",
+    }
 
 
 @dataclass
@@ -155,13 +170,7 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
     assert captured["skills"] == ["/skills/core/"]
     assert captured["backend_root_dir"] == tmp_path
     assert captured["backend_virtual_mode"] is True
-    assert set(captured["interrupt_on"]) == {
-        "edit_file",
-        "write_file",
-        "run_command",
-        "run_python",
-        "write_report",
-    }
+    assert captured["interrupt_on"] == {}
     assert len(captured["tools"]) == 5
     tool_names = {t.name for t in captured["tools"]}
     assert tool_names == {
@@ -187,11 +196,7 @@ def test_deepagents_session_reuses_agent_between_turns(tmp_path, monkeypatch):
 
         def invoke(self, input_value, config):
             self.prompts.append(input_value["messages"][0]["content"])
-            return {
-                "messages": [
-                    {"role": "assistant", "content": f"answer {len(self.prompts)}"}
-                ]
-            }
+            return {"messages": [{"role": "assistant", "content": f"answer {len(self.prompts)}"}]}
 
     def fake_create_deep_agent(**kwargs):
         captured["create_count"] += 1
