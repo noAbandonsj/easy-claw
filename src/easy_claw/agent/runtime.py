@@ -47,11 +47,6 @@ class StreamEvent:
     thread_id: str | None = None
 
 
-class AgentRuntime(Protocol):
-    def run(self, request: AgentRequest) -> AgentResult:
-        """Run one agent turn."""
-
-
 class ApprovalReviewer(Protocol):
     def review(self, interrupts: Sequence[object]) -> list[dict[str, object]]:
         """Return LangGraph HITL decisions for interrupt payloads."""

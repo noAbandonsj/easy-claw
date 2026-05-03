@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,35 +28,6 @@ class DocumentContent:
     markdown: str
     converted: bool = False
     outside_workspace: bool = False
-
-
-@dataclass(frozen=True)
-class DocumentLoadError:
-    path: str
-    message: str
-    outside_workspace: bool = False
-
-
-@dataclass(frozen=True)
-class DocumentLoadResult:
-    documents: list[DocumentContent]
-    errors: list[DocumentLoadError]
-
-
-def collect_document_paths(workspace_root: Path, requested_paths: Sequence[str]) -> list[Path]:
-    root = normalize_path(workspace_root)
-    collected: list[Path] = []
-    for requested_path in requested_paths:
-        resolved = _resolve_user_path(root, requested_path)
-        if resolved.is_dir():
-            collected.extend(
-                _relative_to_root(path, root)
-                for path in sorted(resolved.rglob("*"))
-                if path.is_file() and path.suffix.lower() in SUPPORTED_DOCUMENT_SUFFIXES
-            )
-        elif resolved.is_file() and resolved.suffix.lower() in SUPPORTED_DOCUMENT_SUFFIXES:
-            collected.append(_relative_to_root(resolved, root))
-    return collected
 
 
 def read_workspace_text(workspace_root: Path, requested_path: str) -> DocumentContent:
@@ -105,55 +75,6 @@ def read_workspace_document(
             converter=converter,
         )
     raise ToolExecutionError(f"Unsupported document type: {requested_path}")
-
-
-def load_workspace_documents(
-    workspace_root: Path,
-    requested_paths: Sequence[str],
-    *,
-    converter: object | None = None,
-) -> DocumentLoadResult:
-    root = normalize_path(workspace_root)
-    documents: list[DocumentContent] = []
-    errors: list[DocumentLoadError] = []
-    for requested_path in requested_paths:
-        resolved = _resolve_user_path(root, requested_path)
-        if not resolved.exists():
-            errors.append(
-                DocumentLoadError(
-                    path=_relative_to_root(resolved, root).as_posix(),
-                    message="File not found",
-                    outside_workspace=_is_outside_workspace(resolved, root),
-                )
-            )
-            continue
-
-        paths = collect_document_paths(root, [requested_path])
-        if not paths and resolved.is_file():
-            errors.append(
-                DocumentLoadError(
-                    path=_relative_to_root(resolved, root).as_posix(),
-                    message=f"Unsupported document type: {resolved.suffix}",
-                    outside_workspace=_is_outside_workspace(resolved, root),
-                )
-            )
-            continue
-
-        for path in paths:
-            try:
-                documents.append(
-                    read_workspace_document(root, path.as_posix(), converter=converter)
-                )
-            except Exception as exc:
-                resolved_path = _resolve_user_path(root, path)
-                errors.append(
-                    DocumentLoadError(
-                        path=_relative_to_root(resolved_path, root).as_posix(),
-                        message=str(exc),
-                        outside_workspace=_is_outside_workspace(resolved_path, root),
-                    )
-                )
-    return DocumentLoadResult(documents=documents, errors=errors)
 
 
 def _resolve_user_path(workspace_root: Path, requested_path: str | Path) -> Path:

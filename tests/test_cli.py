@@ -159,7 +159,15 @@ def test_docs_summarize_command_is_removed():
     assert result.exit_code != 0
 
 
-def test_tools_search_prints_results(tmp_path, monkeypatch):
+def test_top_level_developer_command_aliases_are_removed():
+    runner = CliRunner()
+
+    assert runner.invoke(app, ["tools", "search", "DeepSeek"]).exit_code != 0
+    assert runner.invoke(app, ["skills", "list"]).exit_code != 0
+    assert runner.invoke(app, ["memory", "list"]).exit_code != 0
+
+
+def test_dev_tools_search_prints_results(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         "easy_claw.cli.search_web",
@@ -174,7 +182,7 @@ def test_tools_search_prints_results(tmp_path, monkeypatch):
     )
     runner = CliRunner()
 
-    result = runner.invoke(app, ["tools", "search", "DeepSeek"])
+    result = runner.invoke(app, ["dev", "tools", "search", "DeepSeek"])
 
     assert result.exit_code == 0
     assert "DeepSeek Docs" in result.stdout
@@ -185,38 +193,7 @@ def test_tools_search_prints_results(tmp_path, monkeypatch):
     assert "web_search" in events
 
 
-def test_tools_run_prints_command_output(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(
-        "easy_claw.cli.run_command",
-        lambda command, cwd: CommandResult(
-            command=command,
-            cwd=cwd,
-            exit_code=0,
-            stdout="hello\n",
-            stderr="",
-            timed_out=False,
-            truncated=False,
-        ),
-        raising=False,
-    )
-    runner = CliRunner()
-
-    result = runner.invoke(app, ["tools", "run", "echo hello"])
-
-    assert result.exit_code == 0
-    assert "hello" in result.stdout
-    events = [log for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()]
-    command_log = next(log for log in events if log.event_type == "command_run")
-    payload = json.loads(command_log.payload_json)
-    assert payload["command"] == "echo hello"
-    assert payload["cwd"] == str(tmp_path)
-    assert payload["exit_code"] == 0
-    assert payload["timed_out"] is False
-    assert payload["truncated"] is False
-
-
-def test_dev_tools_run_prints_command_output(tmp_path, monkeypatch):
+def test_dev_tools_run_records_command_output(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         "easy_claw.cli.run_command",
@@ -237,9 +214,17 @@ def test_dev_tools_run_prints_command_output(tmp_path, monkeypatch):
 
     assert result.exit_code == 0
     assert "hello" in result.stdout
+    events = [log for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()]
+    command_log = next(log for log in events if log.event_type == "command_run")
+    payload = json.loads(command_log.payload_json)
+    assert payload["command"] == "echo hello"
+    assert payload["cwd"] == str(tmp_path)
+    assert payload["exit_code"] == 0
+    assert payload["timed_out"] is False
+    assert payload["truncated"] is False
 
 
-def test_tools_python_prints_output(tmp_path, monkeypatch):
+def test_dev_tools_python_prints_output(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         "easy_claw.cli.run_python_code",
@@ -256,7 +241,7 @@ def test_tools_python_prints_output(tmp_path, monkeypatch):
     )
     runner = CliRunner()
 
-    result = runner.invoke(app, ["tools", "python", "print(1 + 1)"])
+    result = runner.invoke(app, ["dev", "tools", "python", "print(1 + 1)"])
 
     assert result.exit_code == 0
     assert "2" in result.stdout

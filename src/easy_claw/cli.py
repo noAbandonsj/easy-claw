@@ -39,9 +39,6 @@ app.add_typer(dev_app, name="dev", rich_help_panel="Development")
 dev_app.add_typer(skills_app, name="skills")
 dev_app.add_typer(memory_app, name="memory")
 dev_app.add_typer(tools_app, name="tools")
-app.add_typer(skills_app, name="skills", hidden=True, deprecated=True)
-app.add_typer(memory_app, name="memory", hidden=True, deprecated=True)
-app.add_typer(tools_app, name="tools", hidden=True, deprecated=True)
 
 
 @app.command(rich_help_panel="Management")

@@ -142,8 +142,6 @@ uv run easy-claw dev skills list
 uv run easy-claw dev memory list
 ```
 
-旧的 `tools`、`skills`、`memory` 顶层入口暂时保留为隐藏兼容命令，但不再作为普通用户主线。
-
 ---
 
 ## API 模式（开发者向）
@@ -252,7 +250,7 @@ easy-claw 保留自己的 Runtime / Session / Workspace / Checkpoint / Approval 
 - `easy_claw.tools.core`：搜索、命令执行、Python、文档读取、报告写入等核心工具。
 - `easy_claw.tools.browser`：Playwright 浏览器工具和浏览器关闭逻辑。
 
-新增 Tavily、MCP、数据库、文件索引等工具时，优先新增独立工具文件并在 `agent/toolset.py` 注册，避免把工具构建细节散落到 config、CLI、runtime 和 workflow。
+新增 Tavily、MCP、数据库、文件索引等工具时，优先新增独立工具文件并在 `agent/toolset.py` 注册，避免把工具构建细节散落到 config、CLI、runtime 和 API。
 
 `ToolBundle` 是工具层和 Runtime 的边界对象：
 
