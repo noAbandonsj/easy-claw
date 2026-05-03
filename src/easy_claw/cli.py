@@ -9,6 +9,7 @@ import typer
 import uvicorn
 from rich.console import Console
 from rich.panel import Panel
+from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
@@ -272,6 +273,7 @@ def _run_interactive_loop(
             with console.status("[dim]Thinking...[/]"):
                 result = run_turn(prompt)
             console.print(result.content)
+            console.print(Rule(style="dim"))
 
         if audit_repo is not None:
             audit_repo.record(
@@ -416,6 +418,7 @@ def _render_streaming_turn(events: Iterable[StreamEvent]) -> None:
             if printed_token:
                 console.print()
             printed_token = False
+    console.print(Rule(style="dim"))
 
 
 def _print_stream_separator(printed_token: bool) -> None:
