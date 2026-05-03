@@ -340,3 +340,49 @@ def test_deepagent_session_stream_done_content_ignores_tool_results():
         content="final answer",
         thread_id="thread-1",
     )
+
+
+class FakeStreamingInterruptAgent:
+    def __init__(self):
+        self.inputs = []
+
+    def stream(self, input_value, config, stream_mode):
+        self.inputs.append(input_value)
+        if len(self.inputs) == 1:
+            yield {
+                "__interrupt__": (
+                    FakeInterrupt(
+                        {
+                            "action_requests": [
+                                {
+                                    "name": "run_command",
+                                    "args": {"command": "pytest -q"},
+                                    "description": "run tests",
+                                }
+                            ]
+                        }
+                    ),
+                )
+            }
+            return
+        yield FakeStreamMessage("approved")
+
+
+def test_deepagent_session_stream_resumes_after_interrupt():
+    agent = FakeStreamingInterruptAgent()
+    session = DeepAgentSession(
+        agent=agent,
+        thread_id="thread-1",
+        reviewer=StaticApprovalReviewer(approve=True),
+        checkpointer_context=NullCheckpointerContext(),
+    )
+
+    events = list(session.stream("run tests"))
+
+    assert events == [
+        StreamEvent(type="approval_required", thread_id="thread-1"),
+        StreamEvent(type="token", content="approved", thread_id="thread-1"),
+        StreamEvent(type="done", content="approved", thread_id="thread-1"),
+    ]
+    assert isinstance(agent.inputs[1], Command)
+    assert agent.inputs[1].resume == {"decisions": [{"type": "approve"}]}

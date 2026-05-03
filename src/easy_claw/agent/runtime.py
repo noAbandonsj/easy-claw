@@ -256,13 +256,30 @@ def _stream_with_approval(
     reviewer: ApprovalReviewer,
     thread_id: str,
 ) -> Iterable[StreamEvent]:
-    del reviewer
+    from langgraph.types import Command
+
     content = ""
-    for stream_item in agent.stream(input_value, config, stream_mode="messages"):
-        for event in _events_from_stream_item(stream_item, thread_id=thread_id):
-            if event.type == "token":
-                content += event.content
-            yield event
+    next_input = input_value
+
+    while True:
+        interrupted = False
+        for stream_item in agent.stream(next_input, config, stream_mode="messages"):
+            interrupts = _extract_interrupts(stream_item)
+            if interrupts:
+                yield StreamEvent(type="approval_required", thread_id=thread_id)
+                decisions = reviewer.review(interrupts)
+                next_input = Command(resume={"decisions": decisions})
+                interrupted = True
+                break
+
+            for event in _events_from_stream_item(stream_item, thread_id=thread_id):
+                if event.type == "token":
+                    content += event.content
+                yield event
+
+        if not interrupted:
+            break
+
     yield StreamEvent(type="done", content=content, thread_id=thread_id)
 
 
