@@ -150,7 +150,7 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
         lambda model, base_url, api_key: "chat-model",
     )
     monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
-    monkeypatch.setattr("deepagents.backends.FilesystemBackend", FakeBackend)
+    monkeypatch.setattr("deepagents.backends.LocalShellBackend", FakeBackend)
 
     result = DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True)).run(
         AgentRequest(
@@ -222,7 +222,7 @@ def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkey
         lambda model, base_url, api_key: "chat-model",
     )
     monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
-    monkeypatch.setattr("deepagents.backends.FilesystemBackend", FakeBackend)
+    monkeypatch.setattr("deepagents.backends.LocalShellBackend", FakeBackend)
     monkeypatch.setattr(
         "easy_claw.agent.runtime.build_easy_claw_tools",
         fake_build_easy_claw_tools,
@@ -279,7 +279,7 @@ def test_deepagents_session_reuses_agent_between_turns(tmp_path, monkeypatch):
         lambda model, base_url, api_key: "chat-model",
     )
     monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
-    monkeypatch.setattr("deepagents.backends.FilesystemBackend", FakeBackend)
+    monkeypatch.setattr("deepagents.backends.LocalShellBackend", FakeBackend)
 
     runtime = DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True))
     with runtime.open_session(

@@ -119,7 +119,7 @@ class DeepAgentsRuntime:
         system_prompt = _build_system_prompt(request.memories)
 
         from deepagents import create_deep_agent
-        from deepagents.backends import FilesystemBackend
+        from deepagents.backends import LocalShellBackend
         from langgraph.checkpoint.sqlite import SqliteSaver
 
         tool_bundle = build_easy_claw_tools(
@@ -143,7 +143,7 @@ class DeepAgentsRuntime:
                 max_model_calls=request.max_model_calls,
                 max_tool_calls=request.max_tool_calls,
             ),
-            backend=FilesystemBackend(root_dir=request.workspace_path, virtual_mode=True),
+            backend=LocalShellBackend(root_dir=request.workspace_path, virtual_mode=True),
             checkpointer=checkpointer,
             interrupt_on=interrupt_on,
         )

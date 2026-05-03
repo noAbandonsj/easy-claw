@@ -45,7 +45,17 @@ $env:EASY_CLAW_API_KEY = "你的 API Key"
 
 ### 3. 启动
 
+直接运行脚本，自动完成依赖同步、数据库初始化并启动：
+
 ```powershell
+.\scripts\start.ps1
+```
+
+或手动分步执行：
+
+```powershell
+uv sync
+uv run easy-claw init-db
 uv run easy-claw chat --interactive
 ```
 
@@ -61,6 +71,12 @@ easy-claw> 运行 pytest 看看有没有失败的测试
 
 ```powershell
 uv run easy-claw doctor
+```
+
+**高级用户**：如需启动 API 服务（开发者向），加 `-ApiServer` 参数：
+
+```powershell
+.\scripts\start.ps1 -ApiServer
 ```
 
 ---

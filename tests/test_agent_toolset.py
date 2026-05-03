@@ -20,6 +20,7 @@ def test_build_easy_claw_tools_returns_core_tools_without_browser(tmp_path):
     ]
     assert bundle.interrupt_on == {
         "edit_file": True,
+        "execute": True,
         "write_file": True,
         "run_command": True,
         "run_python": True,

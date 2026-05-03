@@ -1,6 +1,7 @@
 param(
     [string]$HostAddress = "127.0.0.1",
-    [int]$Port = 8787
+    [int]$Port = 8787,
+    [switch]$ApiServer
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,11 +21,16 @@ uv sync
 Write-Host "Initializing local database..."
 uv run easy-claw init-db
 
-Write-Host "Starting easy-claw API at http://$HostAddress`:$Port"
-uv run easy-claw serve --host $HostAddress --port $Port
-
-Write-Host ""
-Write-Host "API is running. This is a developer endpoint (Swagger docs at http://$HostAddress`:$Port/docs)."
-Write-Host "To start the interactive AI assistant, open another terminal and run:"
-Write-Host "  uv run easy-claw chat --interactive"
-Write-Host ""
+if ($ApiServer) {
+    Write-Host "Starting easy-claw API at http://$HostAddress`:$Port"
+    uv run easy-claw serve --host $HostAddress --port $Port
+    Write-Host ""
+    Write-Host "API is running. Swagger docs at http://$HostAddress`:$Port/docs"
+    Write-Host "To start the interactive AI assistant, run:"
+    Write-Host "  uv run easy-claw chat --interactive"
+}
+else {
+    Write-Host ""
+    Write-Host "Starting easy-claw interactive chat..."
+    uv run easy-claw chat --interactive
+}

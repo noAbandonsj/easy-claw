@@ -6,6 +6,7 @@ from easy_claw.tools.core import build_core_tool_bundle
 
 DEEPAGENTS_FILESYSTEM_INTERRUPT_ON = {
     "edit_file": True,
+    "execute": True,
     "write_file": True,
 }
 
