@@ -256,8 +256,10 @@ def _run_interactive_loop(
 ) -> None:
     while True:
         try:
-            prompt = input("easy-claw> ").strip()
+            console.print("  [bold cyan]easy-claw>[/] ", end="")
+            prompt = input().strip()
         except EOFError:
+            console.print()
             break
         if prompt.lower() in {"exit", "quit", ":q"}:
             break
