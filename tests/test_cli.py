@@ -117,6 +117,49 @@ def test_render_streaming_turn_prints_tokens_and_tool_panels(monkeypatch):
     assert "# Project" in rendered
 
 
+def test_chat_interactive_uses_stream_when_session_supports_it(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
+    prompts = []
+
+    class FakeStreamingSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            pass
+
+        def run(self, prompt):
+            raise AssertionError("interactive chat should prefer stream()")
+
+        def stream(self, prompt):
+            prompts.append(prompt)
+            yield StreamEvent(type="token", content=f"stream: {prompt}")
+            yield StreamEvent(type="done", content=f"stream: {prompt}", thread_id="thread-1")
+
+    class FakeRuntime:
+        def open_session(self, request):
+            return FakeStreamingSession()
+
+    monkeypatch.setattr("easy_claw.cli.DeepAgentsRuntime", FakeRuntime)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["chat", "--interactive"],
+        input="hello\nexit\n",
+    )
+
+    assert result.exit_code == 0
+    assert "stream: hello" in result.stdout
+    assert prompts == ["hello"]
+    events = [
+        log.event_type
+        for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
+    ]
+    assert events.count("agent_run") == 1
+
+
 def test_docs_summarize_dry_run_reads_document(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "README.md").write_text("# Project", encoding="utf-8")

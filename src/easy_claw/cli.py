@@ -275,8 +275,10 @@ def _run_interactive_chat(*, dry_run: bool) -> None:
         return
 
     with open_session(base_request) as agent_session:
+        stream_turn = getattr(agent_session, "stream", None)
         _run_interactive_loop(
             run_turn=agent_session.run,
+            stream_turn=stream_turn,
             audit_repo=audit_repo,
             session_id=session_id,
         )
@@ -287,6 +289,7 @@ def _run_interactive_loop(
     run_turn: Callable[[str], AgentResult],
     audit_repo: AuditRepository | None,
     session_id: str,
+    stream_turn: Callable[[str], Iterable[StreamEvent]] | None = None,
 ) -> None:
     while True:
         try:
@@ -298,13 +301,17 @@ def _run_interactive_loop(
         if prompt == "":
             continue
 
-        result = run_turn(prompt)
+        if stream_turn is not None:
+            _render_streaming_turn(stream_turn(prompt))
+        else:
+            result = run_turn(prompt)
+            console.print(result.content)
+
         if audit_repo is not None:
             audit_repo.record(
                 event_type="agent_run",
                 payload={"session_id": session_id, "prompt_length": len(prompt)},
             )
-        console.print(result.content)
 
 
 def _agent_request_for_prompt(request: AgentRequest, prompt: str) -> AgentRequest:
