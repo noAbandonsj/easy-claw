@@ -308,7 +308,7 @@ def tool_search(query: str) -> None:
     config = load_config()
     initialize_product_db(config.product_db_path)
     try:
-        results = search_web(query)
+        results = search_web(query, config=config)
     except ToolExecutionError as exc:
         AuditRepository(config.product_db_path).record(
             event_type="web_search_failed",

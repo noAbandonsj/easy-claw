@@ -171,7 +171,7 @@ def test_dev_tools_search_prints_results(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         "easy_claw.cli.search_web",
-        lambda query: [
+        lambda query, **_: [
             SearchResult(
                 title="DeepSeek Docs",
                 url="https://api-docs.deepseek.com",

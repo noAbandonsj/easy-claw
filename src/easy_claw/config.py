@@ -24,6 +24,8 @@ class AppConfig:
     execution_mode: str = "local"
     browser_enabled: bool = False
     browser_headless: bool = False
+    search_backend: str = "auto"
+    tavily_api_key: str | None = None
     max_model_calls: int | None = DEFAULT_MAX_MODEL_CALLS
     max_tool_calls: int | None = DEFAULT_MAX_TOOL_CALLS
 
@@ -80,6 +82,8 @@ def load_config(
         values.get("EASY_CLAW_MAX_TOOL_CALLS"),
         default=DEFAULT_MAX_TOOL_CALLS,
     )
+    search_backend = (values.get("EASY_CLAW_SEARCH_BACKEND") or "auto").strip().lower()
+    tavily_api_key = values.get("TAVILY_API_KEY") or None
 
     return AppConfig(
         cwd=current_dir,
@@ -94,6 +98,8 @@ def load_config(
         execution_mode=execution_mode,
         browser_enabled=browser_enabled,
         browser_headless=browser_headless,
+        search_backend=search_backend,
+        tavily_api_key=tavily_api_key,
         max_model_calls=max_model_calls,
         max_tool_calls=max_tool_calls,
     )
