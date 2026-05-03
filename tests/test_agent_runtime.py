@@ -5,9 +5,11 @@ from langgraph.types import Command
 
 from easy_claw.agent.runtime import (
     AgentRequest,
+    DeepAgentSession,
     DeepAgentsRuntime,
     FakeAgentRuntime,
     StaticApprovalReviewer,
+    StreamEvent,
     _build_chat_model,
     _invoke_with_approval,
 )
@@ -210,3 +212,55 @@ def test_deepagents_session_reuses_agent_between_turns(tmp_path, monkeypatch):
     assert second.content == "answer 2"
     assert captured["create_count"] == 1
     assert captured["agent"].prompts == ["first", "second"]
+
+
+@dataclass
+class FakeStreamMessage:
+    content: str
+
+
+class NullCheckpointerContext:
+    def __exit__(self, exc_type, exc, traceback):
+        pass
+
+
+class FakeStreamingAgent:
+    def __init__(self):
+        self.inputs = []
+        self.stream_modes = []
+
+    def stream(self, input_value, config, stream_mode):
+        self.inputs.append(input_value)
+        self.stream_modes.append(stream_mode)
+        yield FakeStreamMessage("hello ")
+        yield (FakeStreamMessage("world"), {"langgraph_node": "agent"})
+
+
+def test_stream_event_can_represent_token_and_done():
+    token = StreamEvent(type="token", content="hello", thread_id="thread-1")
+    done = StreamEvent(type="done", content="hello", thread_id="thread-1")
+
+    assert token.type == "token"
+    assert token.content == "hello"
+    assert done.type == "done"
+    assert done.thread_id == "thread-1"
+
+
+def test_deepagent_session_stream_yields_tokens_and_done():
+    agent = FakeStreamingAgent()
+    session = DeepAgentSession(
+        agent=agent,
+        thread_id="thread-1",
+        reviewer=StaticApprovalReviewer(approve=True),
+        checkpointer_context=NullCheckpointerContext(),
+    )
+
+    events = list(session.stream("say hello"))
+
+    assert events == [
+        StreamEvent(type="token", content="hello ", thread_id="thread-1"),
+        StreamEvent(type="token", content="world", thread_id="thread-1"),
+        StreamEvent(type="done", content="hello world", thread_id="thread-1"),
+    ]
+    assert agent.inputs == [{"messages": [{"role": "user", "content": "say hello"}]}]
+    assert agent.stream_modes == ["messages"]

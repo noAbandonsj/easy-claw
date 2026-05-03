@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -25,6 +25,16 @@ class AgentRequest:
 class AgentResult:
     content: str
     thread_id: str
+
+
+@dataclass(frozen=True)
+class StreamEvent:
+    type: str
+    content: str = ""
+    tool_name: str | None = None
+    tool_args: object | None = None
+    tool_result: object | None = None
+    thread_id: str | None = None
 
 
 class AgentRuntime(Protocol):
@@ -173,6 +183,15 @@ class DeepAgentSession:
             thread_id=self._thread_id,
         )
 
+    def stream(self, prompt: str) -> Iterable[StreamEvent]:
+        return _stream_with_approval(
+            self._agent,
+            {"messages": [{"role": "user", "content": prompt}]},
+            config={"configurable": {"thread_id": self._thread_id}},
+            reviewer=self._reviewer,
+            thread_id=self._thread_id,
+        )
+
 
 def _build_chat_model(model: str, base_url: str, api_key: str) -> object:
     from langchain_openai import ChatOpenAI
@@ -226,6 +245,45 @@ def _invoke_with_approval(
         decisions = reviewer.review(interrupts)
         result = agent.invoke(Command(resume={"decisions": decisions}), config)
     return result
+
+
+def _stream_with_approval(
+    agent: Any,
+    input_value: object,
+    *,
+    config: dict[str, object],
+    reviewer: ApprovalReviewer,
+    thread_id: str,
+) -> Iterable[StreamEvent]:
+    del reviewer
+    content = ""
+    for stream_item in agent.stream(input_value, config, stream_mode="messages"):
+        for event in _events_from_stream_item(stream_item, thread_id=thread_id):
+            content += event.content
+            yield event
+    yield StreamEvent(type="done", content=content, thread_id=thread_id)
+
+
+def _events_from_stream_item(stream_item: object, *, thread_id: str) -> Iterable[StreamEvent]:
+    message = _message_from_stream_item(stream_item)
+    content = _text_from_message(message)
+    if content:
+        yield StreamEvent(type="token", content=content, thread_id=thread_id)
+
+
+def _message_from_stream_item(stream_item: object) -> object:
+    if isinstance(stream_item, tuple):
+        return stream_item[0]
+    return stream_item
+
+
+def _text_from_message(message: object) -> str:
+    content = getattr(message, "content", None)
+    if content is None and isinstance(message, dict):
+        content = message.get("content")
+    if content is None:
+        return ""
+    return str(content)
 
 
 def _extract_interrupts(result: object) -> tuple[object, ...]:
