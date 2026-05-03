@@ -54,7 +54,8 @@ def doctor() -> None:
     console.print(f"workspace: {config.default_workspace}")
     console.print(f"model: {config.model or '<not configured>'}")
     console.print(f"base_url: {config.base_url}")
-    console.print(f"api_key: {'***' + config.api_key[-4:] if config.api_key else '<not configured>'}")
+    api_key_display = "***" + config.api_key[-4:] if config.api_key else "<not configured>"
+    console.print(f"api_key: {api_key_display}")
 
 
 @app.command("init-db", rich_help_panel="Management")
