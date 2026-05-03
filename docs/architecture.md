@@ -587,11 +587,11 @@ v0.2 的工具调用过程对用户是黑盒——Agent 调了什么工具、入
 
 核心思路：
 
-- `runtime.py` 中 `agent.invoke()` 改为 `agent.stream(stream_mode="messages")`，逐个 yield LangGraph event
-- 新增 `StreamEvent` 数据类：区分 token 增量（`token`）、工具调用开始（`tool_call_start`）、工具调用结果（`tool_call_result`）、最终消息（`done`）
-- `_invoke_with_approval` 改为生成器，在工具调用事件上仍然触发 interrupt 审批
-- CLI `chat` 命令用 Rich `Live` / `Panel` 实时渲染：token 流逐字输出，工具调用以独立面板穿插显示（工具名、参数、返回值）
-- API 预留 `POST /runs/stream` SSE 端点结构，但 v0.3 不实现 Web 端流式
+- `DeepAgentSession` 新增 `stream(prompt)`，内部调用 `agent.stream(..., stream_mode="messages")` 并逐个转换 LangGraph event
+- 新增 `StreamEvent` 数据类：区分 token 增量（`token`）、工具调用开始（`tool_call_start`）、工具调用结果（`tool_call_result`）、审批提示（`approval_required`）、最终消息（`done`）
+- `_invoke_with_approval` 和 `run()` 保持同步路径不变；流式路径单独处理 interrupt，并用 `Command(resume={"decisions": ...})` 恢复执行
+- CLI `chat --interactive` 用 Rich `Panel` 实时渲染：token 流逐字输出，工具调用以独立面板穿插显示（工具名、参数、返回值摘要）
+- v0.3 不实现 API SSE；`POST /runs/stream` 和 Web 端流式放到后续版本
 
 不依赖 MCP、长期记忆或沙箱，可以紧接着 v0.2 做。
 
