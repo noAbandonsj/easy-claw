@@ -133,7 +133,7 @@ class AgentRuntime(Protocol):
 1. 通过 `langchain_openai.ChatOpenAI` 初始化 DeepSeek 模型（兼容 OpenAI API）
 2. 调用 `deepagents.create_deep_agent()` 创建 Agent，传入：
    - `skills`：skill 源目录路径列表，由 deepagents SDK 原生处理 skill 发现和注入
-   - `backend=FilesystemBackend(root_dir=..., virtual_mode=True)`：虚拟化文件系统，将 Agent 的文件操作限制在 workspace 内
+   - `backend=LocalShellBackend(root_dir=..., virtual_mode=True)`：虚拟化文件系统 + 本地 shell 执行，将 Agent 的文件操作限制在 workspace 内
    - `checkpointer=SqliteSaver`：LangGraph SQLite checkpoint，用于对话状态持久化
    - `interrupt_on`：由 `EASY_CLAW_APPROVAL_MODE` 决定；默认 `permissive` 不打断，`balanced` / `strict` 对命令执行、Python 执行和文件写入触发 LangGraph interrupt
 3. 如触发 interrupt，通过 `ConsoleApprovalReviewer` 在控制台展示操作信息后请求用户 y/N 确认
@@ -252,7 +252,7 @@ MCP Resources 和 Roots 的设计也适合 easy-claw：
 2. 创建 session 记录（`SessionRepository`）
 3. 加载 Markdown Skills（`discover_skill_sources`）和显式记忆（`MemoryRepository`）
 4. 构建包含文档内容的 prompt，调用 `DeepAgentsRuntime`
-5. 可选：将结果通过 `write_markdown_report` 写入 Markdown 文件
+5. 可选：将结果写入 Markdown 文件（通过 deepagents 的 `write_file` 工具）
 6. 全程记录活动日志（`AuditRepository`）：文档读取、文档转换、Agent 调用、报告写入
 
 CLI 的 `dev docs summarize` 和 API 的 `POST /runs` 都复用同一个 workflow 函数 `run_document_task()`。旧的顶层 `docs summarize` 仅作为隐藏兼容入口保留。
@@ -294,7 +294,7 @@ Docker Desktop 的 WSL2 后端适合进阶 Windows 用户，因为 Docker 官方
 当前机制：
 
 1. `permissive`：`interrupt_on={}`，Agent 可直接调用本地命令、Python 和文件写入工具，执行记录进入审计日志
-2. `balanced` / `strict`：`interrupt_on` 覆盖 `edit_file`、`write_file`、`run_command`、`run_python`、`write_report`
+2. `balanced` / `strict`：`interrupt_on` 覆盖 `edit_file`、`execute`、`write_file`、`run_command`、`run_python`
 3. `ConsoleApprovalReviewer` 在控制台展示操作信息（工具名称、参数、描述），请求用户输入 y/N
 4. 用户确认后，通过 `Command(resume={"decisions": [...]})` 恢复 Agent 执行
 4. 提供 `StaticApprovalReviewer`（始终批准/拒绝）用于自动化测试
@@ -529,7 +529,7 @@ easy-claw/
 
 | 能力 | 复用组件 | easy-claw 只做什么 |
 | --- | --- | --- |
-| Agent 编排 | deepagents (基于 LangChain/LangGraph) | 封装 `AgentRuntime`，注册工具和 Skills，提供 FilesystemBackend 虚拟工作区 |
+| Agent 编排 | deepagents (基于 LangChain/LangGraph) | 封装 `AgentRuntime`，注册工具和 Skills，提供 LocalShellBackend 虚拟工作区 |
 | 长任务恢复 | LangGraph | 后期封装 `LangGraphRuntime` |
 | 工具协议 | MCP | 实现 MCP Client Adapter 和权限 UI |
 | 长期记忆 | Mem0 / Honcho | 实现 Memory Provider 接口 |
@@ -566,18 +566,18 @@ easy-claw/
 
 - 复用第一版已有的 DeepAgents Runtime 和 Skill Loader
 - 工作区作为默认上下文，但允许用户显式传入本机路径
-- `FilesystemBackend(virtual_mode=True)` 提供虚拟化文件系统边界
-- 文件选择、读取、写报告和路径解析
+- `LocalShellBackend(virtual_mode=True)` 提供虚拟化文件系统边界与本地 shell 执行
+- 文件选择、读取和路径解析
 - MarkItDown 文档转 Markdown
-- DuckDuckGo 搜索工具
+- DDGS / Tavily 双后端搜索工具
 - PowerShell / Shell 命令工具，默认设置超时和输出截断
 - Python 脚本 / 片段执行工具，用于本地数据和文档处理
 - 本地文档总结开发者 CLI（`dev docs summarize`，旧顶层入口隐藏兼容）
 - 交互式对话模式（`chat --interactive`），复用同一 session 和 checkpoint
 - 文档任务 Workflow 编排（`workflows/document_runs.py`）
 - `POST /runs` API，供后续 Web UI 复用
-- Markdown 报告输出
-- 轻量活动日志，记录读文件、转文档、搜索、命令执行、写报告等关键动作
+- 文件输出（通过 deepagents 的 `write_file` 工具）
+- 轻量活动日志，记录读文件、转文档、搜索、命令执行等关键动作
 - LangGraph interrupt + ConsoleApprovalReviewer 实现文件写入审批
 - 暂不做完整审批引擎、沙箱隔离和复杂权限系统
 - 已知缺口：Agent 输出为同步全量返回，工具调用过程不可见（规划于 v0.3 解决）

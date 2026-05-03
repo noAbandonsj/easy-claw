@@ -176,14 +176,13 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
     assert captured["middleware"][0].run_limit == 40
     assert isinstance(captured["middleware"][1], ToolCallLimitMiddleware)
     assert captured["middleware"][1].run_limit == 100
-    assert len(captured["tools"]) == 5
+    assert len(captured["tools"]) == 4
     tool_names = {t.name for t in captured["tools"]}
     assert tool_names == {
         "search_web",
         "run_command",
         "run_python",
         "read_document",
-        "write_report",
     }
     assert "Use Chinese." in captured["system_prompt"]
 

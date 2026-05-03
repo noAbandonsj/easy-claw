@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from easy_claw.tools.base import ToolExecutionError
-from easy_claw.workspace import normalize_path
+from easy_claw.workspace import is_outside_workspace, normalize_path, relative_to_root, resolve_user_path
 
 TEXT_DOCUMENT_SUFFIXES = {".md", ".txt", ".py", ".json", ".yaml", ".yml"}
 CONVERTIBLE_DOCUMENT_SUFFIXES = {
@@ -32,12 +32,12 @@ class DocumentContent:
 
 def read_workspace_text(workspace_root: Path, requested_path: str) -> DocumentContent:
     root = normalize_path(workspace_root)
-    resolved = _resolve_user_path(root, requested_path)
+    resolved = resolve_user_path(root, requested_path)
     return DocumentContent(
-        relative_path=_relative_to_root(resolved, root).as_posix(),
+        relative_path=relative_to_root(resolved, root).as_posix(),
         markdown=resolved.read_text(encoding="utf-8"),
         converted=False,
-        outside_workspace=_is_outside_workspace(resolved, root),
+        outside_workspace=is_outside_workspace(resolved, root),
     )
 
 
@@ -48,14 +48,14 @@ def convert_workspace_document(
     converter: object | None = None,
 ) -> DocumentContent:
     root = normalize_path(workspace_root)
-    resolved = _resolve_user_path(root, requested_path)
+    resolved = resolve_user_path(root, requested_path)
     active_converter = converter or _create_markitdown_converter()
     result = active_converter.convert(resolved)
     return DocumentContent(
-        relative_path=_relative_to_root(resolved, root).as_posix(),
+        relative_path=relative_to_root(resolved, root).as_posix(),
         markdown=str(getattr(result, "text_content", "")),
         converted=True,
-        outside_workspace=_is_outside_workspace(resolved, root),
+        outside_workspace=is_outside_workspace(resolved, root),
     )
 
 
@@ -75,28 +75,6 @@ def read_workspace_document(
             converter=converter,
         )
     raise ToolExecutionError(f"Unsupported document type: {requested_path}")
-
-
-def _resolve_user_path(workspace_root: Path, requested_path: str | Path) -> Path:
-    path = Path(requested_path)
-    if not path.is_absolute():
-        path = workspace_root / path
-    return normalize_path(path)
-
-
-def _relative_to_root(path: Path, root: Path) -> Path:
-    try:
-        return path.relative_to(root)
-    except ValueError:
-        return path
-
-
-def _is_outside_workspace(path: Path, root: Path) -> bool:
-    try:
-        path.relative_to(root)
-    except ValueError:
-        return True
-    return False
 
 
 def _create_markitdown_converter() -> object:

@@ -235,7 +235,7 @@ def _build_system_prompt(memories: Sequence[str]) -> str:
         "The user should describe tasks naturally; do not ask them to manually run "
         "docs/tools/dev commands.",
         "Use available tools proactively to read files, run tests, inspect projects, "
-        "search, and write reports.",
+        "and search the web.",
         "Operate inside the selected workspace unless the user explicitly asks for another path.",
     ]
     if memories:

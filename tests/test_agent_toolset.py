@@ -16,7 +16,6 @@ def test_build_easy_claw_tools_returns_core_tools_without_browser(tmp_path):
         "run_command",
         "run_python",
         "read_document",
-        "write_report",
     ]
     assert bundle.interrupt_on == {
         "edit_file": True,
@@ -24,7 +23,6 @@ def test_build_easy_claw_tools_returns_core_tools_without_browser(tmp_path):
         "write_file": True,
         "run_command": True,
         "run_python": True,
-        "write_report": True,
     }
     assert bundle.cleanup == ()
 

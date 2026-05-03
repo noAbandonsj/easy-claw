@@ -8,13 +8,11 @@ from easy_claw.agent.types import ToolBundle
 from easy_claw.tools.commands import run_command as _run_command
 from easy_claw.tools.documents import read_workspace_document as _read_workspace_document
 from easy_claw.tools.python_runner import run_python_code as _run_python_code
-from easy_claw.tools.reports import write_markdown_report as _write_markdown_report
 from easy_claw.tools.search import search_web as _search_web
 
 CORE_INTERRUPT_ON = {
     "run_command": True,
     "run_python": True,
-    "write_report": True,
 }
 
 
@@ -114,21 +112,4 @@ def build_core_tools(*, workspace_path: Path, cwd: Path) -> list[object]:
             prefix += " [outside workspace]"
         return f"{prefix}\n\n{document.markdown}"
 
-    @tool
-    def write_report(path: str, content: str) -> str:
-        """Write a markdown report to a file in the workspace.
-
-        The path is relative to the workspace root. Parent directories are
-        created automatically. Use this to save summaries, analysis results,
-        or generated documentation for the user.
-        """
-        try:
-            output = _write_markdown_report(workspace_path, path, content)
-        except Exception as exc:
-            return f"Failed to write report '{path}': {exc}"
-        location = output.relative_path
-        if output.outside_workspace:
-            location += " [outside workspace - user approved]"
-        return f"Report written to: {location}"
-
-    return [search_web, run_command, run_python, read_document, write_report]
+    return [search_web, run_command, run_python, read_document]

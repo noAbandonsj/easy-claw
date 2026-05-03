@@ -1,3 +1,6 @@
+import pytest
+
+from easy_claw.tools.base import ToolExecutionError
 from easy_claw.tools.browser import build_browser_tools
 
 
@@ -33,6 +36,10 @@ def test_build_browser_tools_creates_langchain_playwright_tools(monkeypatch):
             return fake_tools
 
     monkeypatch.setattr(
+        "easy_claw.tools.browser._check_playwright_browsers",
+        lambda *, headless: True,
+    )
+    monkeypatch.setattr(
         "easy_claw.tools.browser.create_sync_playwright_browser",
         fake_create_browser,
         raising=False,
@@ -51,3 +58,32 @@ def test_build_browser_tools_creates_langchain_playwright_tools(monkeypatch):
     bundle.close()
 
     assert closed == ["closed"]
+
+
+def test_build_browser_tools_raises_when_playwright_not_installed(monkeypatch):
+    monkeypatch.setattr(
+        "easy_claw.tools.browser.create_sync_playwright_browser",
+        lambda **_: (_ for _ in ()).throw(
+            Exception("Executable doesn't exist\nplaywright install\n")
+        ),
+        raising=False,
+    )
+    monkeypatch.setattr("easy_claw.tools.browser._check_playwright_browsers", lambda *, headless: True)
+    monkeypatch.setattr(
+        "easy_claw.tools.browser.PlayWrightBrowserToolkit",
+        object(),
+        raising=False,
+    )
+
+    with pytest.raises(ToolExecutionError, match="uv run playwright install chromium"):
+        build_browser_tools(enabled=True, headless=False)
+
+
+def test_build_browser_tools_raises_when_browser_check_fails(monkeypatch):
+    monkeypatch.setattr(
+        "easy_claw.tools.browser._check_playwright_browsers",
+        lambda *, headless: False,
+    )
+
+    with pytest.raises(ToolExecutionError, match="uv run playwright install chromium"):
+        build_browser_tools(enabled=True, headless=False)
