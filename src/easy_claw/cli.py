@@ -10,6 +10,7 @@ import uvicorn
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 from easy_claw.agent.runtime import (
     AgentRequest,
@@ -194,7 +195,7 @@ def _run_interactive_chat(*, dry_run: bool) -> None:
         memories = [item.content for item in MemoryRepository(config.product_db_path).list_memory()]
         runtime = DeepAgentsRuntime()
 
-    console.print("Interactive chat started. Type exit or quit to leave.")
+    _render_startup_banner(config)
     base_request = AgentRequest(
         prompt="",
         thread_id=session_id,
@@ -421,6 +422,33 @@ def _format_stream_value(value: object) -> str:
     if len(text) <= STREAM_PANEL_VALUE_LIMIT:
         return text
     return text[:STREAM_PANEL_VALUE_LIMIT] + "\n[truncated]"
+
+
+def _render_startup_banner(config: "AppConfig") -> None:  # noqa: F821
+    """Render a startup banner showing current configuration."""
+    approval_color = {"permissive": "green", "balanced": "yellow", "strict": "red"}
+    color = approval_color.get(config.approval_mode, "white")
+
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(style="bold cyan", justify="right")
+    grid.add_column(style="white")
+    grid.add_row("Model:", config.model or "[dim]dry-run[/]")
+    grid.add_row("Workspace:", str(config.default_workspace))
+    grid.add_row(
+        "Approval:",
+        f"[{color}]{config.approval_mode}[/]",
+    )
+    grid.add_row("Browser:", "enabled" if config.browser_enabled else "disabled")
+
+    banner = Panel(
+        grid,
+        title="[bold]easy-claw v0.3[/]",
+        title_align="left",
+        border_style="cyan",
+    )
+    console.print(banner)
+    console.print("[dim]Type :q, exit or quit to leave. Empty line to skip.[/]")
+    console.print()
 
 
 def main() -> None:
