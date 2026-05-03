@@ -7,6 +7,8 @@ def test_load_config_uses_local_data_dir(tmp_path, monkeypatch):
     monkeypatch.delenv("EASY_CLAW_DATA_DIR", raising=False)
     monkeypatch.delenv("EASY_CLAW_APPROVAL_MODE", raising=False)
     monkeypatch.delenv("EASY_CLAW_EXECUTION_MODE", raising=False)
+    monkeypatch.delenv("EASY_CLAW_BROWSER_ENABLED", raising=False)
+    monkeypatch.delenv("EASY_CLAW_BROWSER_HEADLESS", raising=False)
 
     config = load_config(cwd=tmp_path)
 
@@ -15,6 +17,8 @@ def test_load_config_uses_local_data_dir(tmp_path, monkeypatch):
     assert config.checkpoint_db_path == tmp_path / "data" / "checkpoints.sqlite"
     assert config.approval_mode == "permissive"
     assert config.execution_mode == "local"
+    assert config.browser_enabled is False
+    assert config.browser_headless is False
 
 
 def test_load_config_reads_env_overrides(tmp_path, monkeypatch):
@@ -27,6 +31,8 @@ def test_load_config_reads_env_overrides(tmp_path, monkeypatch):
     monkeypatch.setenv("EASY_CLAW_API_KEY", "sk-test")
     monkeypatch.setenv("EASY_CLAW_APPROVAL_MODE", "balanced")
     monkeypatch.setenv("EASY_CLAW_EXECUTION_MODE", "local")
+    monkeypatch.setenv("EASY_CLAW_BROWSER_ENABLED", "true")
+    monkeypatch.setenv("EASY_CLAW_BROWSER_HEADLESS", "1")
 
     config = load_config(cwd=tmp_path)
 
@@ -37,6 +43,8 @@ def test_load_config_reads_env_overrides(tmp_path, monkeypatch):
     assert config.api_key == "sk-test"
     assert config.approval_mode == "balanced"
     assert config.execution_mode == "local"
+    assert config.browser_enabled is True
+    assert config.browser_headless is True
 
 
 def test_load_config_defaults_base_url_to_deepseek(tmp_path, monkeypatch):

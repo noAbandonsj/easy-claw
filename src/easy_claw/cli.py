@@ -62,6 +62,8 @@ def doctor() -> None:
     console.print(f"base_url: {config.base_url}")
     console.print(f"approval_mode: {config.approval_mode}")
     console.print(f"execution_mode: {config.execution_mode}")
+    console.print(f"browser_enabled: {config.browser_enabled}")
+    console.print(f"browser_headless: {config.browser_headless}")
     api_key_display = "***" + config.api_key[-4:] if config.api_key else "<not configured>"
     console.print(f"api_key: {api_key_display}")
 
@@ -160,6 +162,8 @@ def chat(
             checkpoint_db_path=config.checkpoint_db_path,
             approval_mode=config.approval_mode,
             execution_mode=config.execution_mode,
+            browser_enabled=config.browser_enabled,
+            browser_headless=config.browser_headless,
         )
     )
     audit_repo.record(
@@ -260,6 +264,8 @@ def _run_interactive_chat(*, dry_run: bool) -> None:
         checkpoint_db_path=config.checkpoint_db_path if not dry_run else None,
         approval_mode=config.approval_mode,
         execution_mode=config.execution_mode,
+        browser_enabled=config.browser_enabled,
+        browser_headless=config.browser_headless,
     )
     if dry_run:
         _run_interactive_loop(
@@ -338,6 +344,8 @@ def _agent_request_for_prompt(request: AgentRequest, prompt: str) -> AgentReques
         checkpoint_db_path=request.checkpoint_db_path,
         approval_mode=request.approval_mode,
         execution_mode=request.execution_mode,
+        browser_enabled=request.browser_enabled,
+        browser_headless=request.browser_headless,
     )
 
 

@@ -74,6 +74,7 @@ uv run easy-claw doctor
 | 总结文档 | "帮我总结 docs/architecture.md，输出关键设计决策" |
 | 分析项目 | "分析这个项目的代码结构，解释各模块的职责" |
 | 搜索资料 | "搜索 DeepSeek API 最新的 function calling 文档" |
+| 浏览网页 | "打开 Deep Agents 文档，找到 sandbox backend 的 execute 说明" |
 | 运行测试 | "运行 pytest 并告诉我哪些测试失败了" |
 | 生成报告 | "把刚才的分析结果写入 reports/analysis.md" |
 | 代码片段 | "用 Python 读取 data/config.json 并打印所有 key" |
@@ -217,6 +218,25 @@ EASY_CLAW_APPROVAL_MODE=balanced
 ```
 
 `balanced` / `strict` 会对命令执行、Python 执行和文件写入启用人工确认。
+
+---
+
+## 浏览器操作
+
+easy-claw 可以把 LangChain 的 Playwright 浏览器工具暴露给 Agent。首次使用前安装浏览器内核：
+
+```powershell
+uv run playwright install chromium
+```
+
+然后在 `.env` 中启用：
+
+```env
+EASY_CLAW_BROWSER_ENABLED=true
+EASY_CLAW_BROWSER_HEADLESS=false
+```
+
+启用后，Agent 可以在对话中打开网页、点击链接、提取页面文本，并把浏览器操作和其他工具调用一起用于资料整理、网页分析和简单自动化任务。默认 `headless=false`，Windows 用户可以看到浏览器窗口里发生了什么。
 
 ---
 

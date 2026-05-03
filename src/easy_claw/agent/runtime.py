@@ -8,6 +8,13 @@ from typing import Any, Protocol
 
 from easy_claw.agent.tools import build_agent_tools
 
+try:
+    from langchain_community.agent_toolkits import PlayWrightBrowserToolkit
+    from langchain_community.tools.playwright.utils import create_sync_playwright_browser
+except ImportError:  # pragma: no cover - exercised through runtime error path
+    PlayWrightBrowserToolkit = None
+    create_sync_playwright_browser = None
+
 
 @dataclass(frozen=True)
 class AgentRequest:
@@ -22,6 +29,8 @@ class AgentRequest:
     checkpoint_db_path: Path | None = None
     approval_mode: str = "permissive"
     execution_mode: str = "local"
+    browser_enabled: bool = False
+    browser_headless: bool = False
 
 
 @dataclass(frozen=True)
@@ -38,6 +47,12 @@ class StreamEvent:
     tool_args: object | None = None
     tool_result: object | None = None
     thread_id: str | None = None
+
+
+@dataclass(frozen=True)
+class BrowserToolContext:
+    tools: list[object] = field(default_factory=list)
+    browser: object | None = None
 
 
 class AgentRuntime(Protocol):
@@ -120,10 +135,15 @@ class DeepAgentsRuntime:
         from deepagents.backends import FilesystemBackend
         from langgraph.checkpoint.sqlite import SqliteSaver
 
+        browser_context = _build_browser_tool_context(
+            enabled=request.browser_enabled,
+            headless=request.browser_headless,
+        )
         agent_tools = build_agent_tools(
             workspace_path=request.workspace_path,
             cwd=request.workspace_path,
         )
+        agent_tools.extend(browser_context.tools)
         interrupt_on = _build_interrupt_on(request.approval_mode)
 
         checkpointer_context = SqliteSaver.from_conn_string(str(request.checkpoint_db_path))
@@ -142,6 +162,7 @@ class DeepAgentsRuntime:
             thread_id=request.thread_id,
             reviewer=self._reviewer,
             checkpointer_context=checkpointer_context,
+            browser=browser_context.browser,
         )
 
 
@@ -153,11 +174,13 @@ class DeepAgentSession:
         thread_id: str,
         reviewer: ApprovalReviewer,
         checkpointer_context: object,
+        browser: object | None = None,
     ) -> None:
         self._agent = agent
         self._thread_id = thread_id
         self._reviewer = reviewer
         self._checkpointer_context = checkpointer_context
+        self._browser = browser
 
     def __enter__(self) -> DeepAgentSession:
         return self
@@ -166,7 +189,10 @@ class DeepAgentSession:
         self.close()
 
     def close(self) -> None:
-        self._checkpointer_context.__exit__(None, None, None)
+        try:
+            _close_browser(self._browser)
+        finally:
+            self._checkpointer_context.__exit__(None, None, None)
 
     def run(self, prompt: str) -> AgentResult:
         result = _invoke_with_approval(
@@ -213,6 +239,28 @@ def _build_interrupt_on(approval_mode: str) -> dict[str, bool]:
             "write_report": True,
         }
     return {}
+
+
+def _build_browser_tool_context(*, enabled: bool, headless: bool) -> BrowserToolContext:
+    if not enabled:
+        return BrowserToolContext()
+    if PlayWrightBrowserToolkit is None or create_sync_playwright_browser is None:
+        raise RuntimeError(
+            "Browser tools require langchain-community and playwright. "
+            "Install dependencies and run `uv run playwright install chromium`."
+        )
+
+    browser = create_sync_playwright_browser(headless=headless)
+    toolkit = PlayWrightBrowserToolkit.from_browser(sync_browser=browser)
+    return BrowserToolContext(tools=list(toolkit.get_tools()), browser=browser)
+
+
+def _close_browser(browser: object | None) -> None:
+    if browser is None:
+        return
+    close = getattr(browser, "close", None)
+    if callable(close):
+        close()
 
 
 def _build_system_prompt(memories: Sequence[str]) -> str:

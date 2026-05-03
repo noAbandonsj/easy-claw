@@ -20,12 +20,20 @@ class AppConfig:
     api_key: str | None
     approval_mode: str = "permissive"
     execution_mode: str = "local"
+    browser_enabled: bool = False
+    browser_headless: bool = False
 
 
 def _read_path(value: str | None, default: Path) -> Path:
     if value is None or value.strip() == "":
         return default
     return Path(value).expanduser()
+
+
+def _read_bool(value: str | None, default: bool = False) -> bool:
+    if value is None or value.strip() == "":
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def load_config(
@@ -51,6 +59,8 @@ def load_config(
     api_key = values.get("EASY_CLAW_API_KEY") or values.get("DEEPSEEK_API_KEY") or None
     approval_mode = (values.get("EASY_CLAW_APPROVAL_MODE") or "permissive").strip().lower()
     execution_mode = (values.get("EASY_CLAW_EXECUTION_MODE") or "local").strip().lower()
+    browser_enabled = _read_bool(values.get("EASY_CLAW_BROWSER_ENABLED"), default=False)
+    browser_headless = _read_bool(values.get("EASY_CLAW_BROWSER_HEADLESS"), default=False)
 
     return AppConfig(
         cwd=current_dir,
@@ -63,4 +73,6 @@ def load_config(
         api_key=api_key,
         approval_mode=approval_mode,
         execution_mode=execution_mode,
+        browser_enabled=browser_enabled,
+        browser_headless=browser_headless,
     )

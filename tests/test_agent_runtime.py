@@ -9,6 +9,7 @@ from easy_claw.agent.runtime import (
     FakeAgentRuntime,
     StaticApprovalReviewer,
     StreamEvent,
+    _build_browser_tool_context,
     _build_chat_model,
     _build_interrupt_on,
     _events_from_stream_item,
@@ -70,6 +71,49 @@ def test_build_interrupt_on_balanced_keeps_human_approval_for_risky_tools():
         "run_python",
         "write_report",
     }
+
+
+def test_build_browser_tool_context_skips_browser_when_disabled():
+    context = _build_browser_tool_context(enabled=False, headless=False)
+
+    assert context.tools == []
+    assert context.browser is None
+
+
+def test_build_browser_tool_context_creates_langchain_playwright_tools(monkeypatch):
+    captured = {}
+    fake_browser = object()
+    fake_tools = [object(), object()]
+
+    def fake_create_browser(*, headless):
+        captured["headless"] = headless
+        return fake_browser
+
+    class FakeToolkit:
+        @classmethod
+        def from_browser(cls, *, sync_browser):
+            captured["sync_browser"] = sync_browser
+            return cls()
+
+        def get_tools(self):
+            return fake_tools
+
+    monkeypatch.setattr(
+        "easy_claw.agent.runtime.create_sync_playwright_browser",
+        fake_create_browser,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "easy_claw.agent.runtime.PlayWrightBrowserToolkit",
+        FakeToolkit,
+        raising=False,
+    )
+
+    context = _build_browser_tool_context(enabled=True, headless=True)
+
+    assert captured == {"headless": True, "sync_browser": fake_browser}
+    assert context.tools == fake_tools
+    assert context.browser is fake_browser
 
 
 @dataclass
@@ -181,6 +225,61 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
         "write_report",
     }
     assert "Use Chinese." in captured["system_prompt"]
+
+
+def test_deepagents_runtime_adds_browser_tools_when_enabled(tmp_path, monkeypatch):
+    captured = {}
+    fake_browser = object()
+    fake_browser_tool = object()
+
+    class FakeBackend:
+        def __init__(self, *, root_dir, virtual_mode):
+            pass
+
+    class FakeDeepAgent:
+        def invoke(self, input_value, config):
+            return {"messages": [{"role": "assistant", "content": "done"}]}
+
+    def fake_create_deep_agent(**kwargs):
+        captured.update(kwargs)
+        return FakeDeepAgent()
+
+    def fake_browser_context(*, enabled, headless):
+        captured["browser_enabled"] = enabled
+        captured["browser_headless"] = headless
+        return type(
+            "FakeBrowserContext",
+            (),
+            {"tools": [fake_browser_tool], "browser": fake_browser},
+        )()
+
+    monkeypatch.setattr(
+        "easy_claw.agent.runtime._build_chat_model",
+        lambda model, base_url, api_key: "chat-model",
+    )
+    monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
+    monkeypatch.setattr("deepagents.backends.FilesystemBackend", FakeBackend)
+    monkeypatch.setattr("easy_claw.agent.runtime._build_browser_tool_context", fake_browser_context)
+
+    with DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True)).open_session(
+        AgentRequest(
+            prompt="",
+            thread_id="thread-1",
+            workspace_path=tmp_path,
+            model="deepseek-v4-pro",
+            base_url="https://api.deepseek.com",
+            api_key="test-key",
+            checkpoint_db_path=tmp_path / "checkpoints.sqlite",
+            browser_enabled=True,
+            browser_headless=True,
+        )
+    ) as session:
+        result = session.run("hello")
+
+    assert result.content == "done"
+    assert captured["browser_enabled"] is True
+    assert captured["browser_headless"] is True
+    assert fake_browser_tool in captured["tools"]
 
 
 def test_deepagents_session_reuses_agent_between_turns(tmp_path, monkeypatch):

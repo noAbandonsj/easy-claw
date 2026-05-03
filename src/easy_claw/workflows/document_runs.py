@@ -72,6 +72,8 @@ def run_document_task(
             checkpoint_db_path=config.checkpoint_db_path,
             approval_mode=config.approval_mode,
             execution_mode=config.execution_mode,
+            browser_enabled=config.browser_enabled,
+            browser_headless=config.browser_headless,
         )
     )
     audit_repo.record(
