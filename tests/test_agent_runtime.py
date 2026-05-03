@@ -11,6 +11,7 @@ from easy_claw.agent.runtime import (
     StaticApprovalReviewer,
     StreamEvent,
     _build_chat_model,
+    _events_from_stream_item,
     _invoke_with_approval,
 )
 
@@ -264,3 +265,78 @@ def test_deepagent_session_stream_yields_tokens_and_done():
     ]
     assert agent.inputs == [{"messages": [{"role": "user", "content": "say hello"}]}]
     assert agent.stream_modes == ["messages"]
+
+
+@dataclass
+class FakeToolCallMessage:
+    content: str
+    tool_calls: list[dict[str, object]]
+
+
+@dataclass
+class FakeToolResultMessage:
+    content: str
+    name: str
+    type: str = "tool"
+
+
+def test_stream_item_with_tool_call_yields_tool_call_start():
+    events = _events_from_stream_item(
+        FakeToolCallMessage(
+            content="",
+            tool_calls=[{"name": "read_document", "args": {"path": "README.md"}}],
+        ),
+        thread_id="thread-1",
+    )
+
+    assert events == [
+        StreamEvent(
+            type="tool_call_start",
+            tool_name="read_document",
+            tool_args={"path": "README.md"},
+            thread_id="thread-1",
+        )
+    ]
+
+
+def test_stream_item_with_tool_result_yields_tool_call_result():
+    events = _events_from_stream_item(
+        FakeToolResultMessage(
+            content="# Project\n\n" + ("x" * 50),
+            name="read_document",
+        ),
+        thread_id="thread-1",
+    )
+
+    assert events == [
+        StreamEvent(
+            type="tool_call_result",
+            content="# Project\n\n" + ("x" * 50),
+            tool_name="read_document",
+            tool_result="# Project\n\n" + ("x" * 50),
+            thread_id="thread-1",
+        )
+    ]
+
+
+class FakeStreamingToolResultAgent:
+    def stream(self, input_value, config, stream_mode):
+        yield FakeToolResultMessage(content="# Project", name="read_document")
+        yield FakeStreamMessage("final answer")
+
+
+def test_deepagent_session_stream_done_content_ignores_tool_results():
+    session = DeepAgentSession(
+        agent=FakeStreamingToolResultAgent(),
+        thread_id="thread-1",
+        reviewer=StaticApprovalReviewer(approve=True),
+        checkpointer_context=NullCheckpointerContext(),
+    )
+
+    events = list(session.stream("read README"))
+
+    assert events[-1] == StreamEvent(
+        type="done",
+        content="final answer",
+        thread_id="thread-1",
+    )
