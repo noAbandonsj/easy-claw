@@ -24,10 +24,8 @@ from easy_claw.storage.db import initialize_product_db
 from easy_claw.storage.repositories import AuditRepository, MemoryRepository, SessionRepository
 from easy_claw.tools.base import ToolExecutionError
 from easy_claw.tools.commands import run_command
-from easy_claw.tools.documents import DocumentLoadResult, load_workspace_documents
 from easy_claw.tools.python_runner import run_python_code
 from easy_claw.tools.search import search_web
-from easy_claw.workflows.document_runs import NoReadableDocumentsError, run_document_task
 
 console = Console()
 DEFAULT_SKILLS_ROOT = Path("skills")
@@ -36,16 +34,13 @@ app = typer.Typer(help="easy-claw - your personal AI assistant for Windows")
 dev_app = typer.Typer(help="Developer and debugging commands")
 skills_app = typer.Typer(help="Manage Markdown skills")
 memory_app = typer.Typer(help="Manage explicit product memory")
-docs_app = typer.Typer(help="Work with local documents")
 tools_app = typer.Typer(help="Run local power tools")
 app.add_typer(dev_app, name="dev", rich_help_panel="Development")
 dev_app.add_typer(skills_app, name="skills")
 dev_app.add_typer(memory_app, name="memory")
-dev_app.add_typer(docs_app, name="docs")
 dev_app.add_typer(tools_app, name="tools")
 app.add_typer(skills_app, name="skills", hidden=True, deprecated=True)
 app.add_typer(memory_app, name="memory", hidden=True, deprecated=True)
-app.add_typer(docs_app, name="docs", hidden=True, deprecated=True)
 app.add_typer(tools_app, name="tools", hidden=True, deprecated=True)
 
 
@@ -175,59 +170,6 @@ def chat(
         payload={"session_id": session.id, "prompt_length": len(prompt)},
     )
     console.print(result.content)
-
-
-@docs_app.command("summarize")
-def summarize_docs(
-    paths: Annotated[list[Path], typer.Argument(help="Files or directories to summarize")],
-    output: Annotated[Path | None, typer.Option("--output")] = None,
-    dry_run: bool = typer.Option(False, "--dry-run"),
-) -> None:
-    """Summarize local documents."""
-    config = load_config()
-
-    if dry_run:
-        load_result = load_workspace_documents(
-            config.default_workspace,
-            [str(path) for path in paths],
-        )
-        _print_document_load_notices(load_result)
-        for document in load_result.documents:
-            console.print(f"## {document.relative_path}")
-            console.print(document.markdown)
-        return
-
-    if config.model is None:
-        console.print("Set EASY_CLAW_MODEL before running docs summarize without --dry-run.")
-        raise typer.Exit(code=1)
-
-    try:
-        result = run_document_task(
-            config=config,
-            prompt=_document_summary_instruction(),
-            document_paths=[str(path) for path in paths],
-            output_path=output,
-            title="Summarize documents",
-        )
-    except NoReadableDocumentsError as exc:
-        _print_document_load_notices(exc.load_result)
-        console.print("No readable documents found.")
-        raise typer.Exit(code=1) from None
-
-    _print_document_load_notices(result.load_result)
-    document_paths_outside_workspace = {
-        document.relative_path
-        for document in result.load_result.documents
-        if document.outside_workspace
-    }
-    for path in result.outside_workspace_paths:
-        if path not in document_paths_outside_workspace:
-            console.print(f"outside workspace path: {path}")
-    console.print(result.content)
-
-
-def _document_summary_instruction() -> str:
-    return "请总结下面这些本地文档，输出 Markdown，包含关键事实、决策、风险和建议下一步。"
 
 
 def _run_interactive_chat(*, dry_run: bool) -> None:
@@ -486,14 +428,3 @@ def _format_stream_value(value: object) -> str:
 
 def main() -> None:
     app()
-
-
-def _print_document_load_notices(load_result: DocumentLoadResult) -> None:
-    for document in load_result.documents:
-        if document.outside_workspace:
-            console.print(f"outside workspace document: {document.relative_path}")
-    for error in load_result.errors:
-        prefix = (
-            "outside workspace document failed" if error.outside_workspace else "document failed"
-        )
-        console.print(f"{prefix}: {error.path} - {error.message}")

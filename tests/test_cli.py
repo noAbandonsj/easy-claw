@@ -11,14 +11,6 @@ from easy_claw.tools.commands import CommandResult
 from easy_claw.tools.search import SearchResult
 
 
-class FakeConverter:
-    def convert(self, path):
-        class Result:
-            text_content = "# Converted"
-
-        return Result()
-
-
 def test_doctor_command_reports_ok(tmp_path, monkeypatch):
     monkeypatch.setenv("EASY_CLAW_DATA_DIR", str(tmp_path / "data"))
     runner = CliRunner()
@@ -159,103 +151,12 @@ def test_chat_interactive_uses_stream_when_session_supports_it(tmp_path, monkeyp
     assert events.count("agent_run") == 1
 
 
-def test_docs_summarize_dry_run_reads_document(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "README.md").write_text("# Project", encoding="utf-8")
+def test_docs_summarize_command_is_removed():
     runner = CliRunner()
 
-    result = runner.invoke(app, ["docs", "summarize", "--dry-run", "README.md"])
+    result = runner.invoke(app, ["dev", "docs", "summarize", "README.md"])
 
-    assert result.exit_code == 0
-    assert "README.md" in result.stdout
-    assert "# Project" in result.stdout
-
-
-def test_docs_summarize_uses_runtime_and_writes_output(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
-    (tmp_path / "README.md").write_text("# Project", encoding="utf-8")
-    captured_prompts = []
-
-    class FakeRuntime:
-        def run(self, request):
-            captured_prompts.append(request.prompt)
-            return AgentResult(content="# Summary", thread_id=request.thread_id)
-
-    monkeypatch.setattr("easy_claw.workflows.document_runs.DeepAgentsRuntime", FakeRuntime)
-    runner = CliRunner()
-
-    result = runner.invoke(
-        app,
-        ["docs", "summarize", "README.md", "--output", "reports/summary.md"],
-    )
-
-    assert result.exit_code == 0
-    assert "# Summary" in result.stdout
-    assert "# Project" in captured_prompts[0]
-    assert (tmp_path / "reports" / "summary.md").read_text(encoding="utf-8") == "# Summary"
-    events = [
-        log.event_type for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
-    ]
-    assert "document_read" in events
-    assert "agent_run" in events
-    assert "report_written" in events
-
-
-def test_docs_summarize_converts_non_text_documents(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
-    (tmp_path / "report.docx").write_bytes(b"fake")
-    captured_prompts = []
-
-    class FakeRuntime:
-        def run(self, request):
-            captured_prompts.append(request.prompt)
-            return AgentResult(content="# Summary", thread_id=request.thread_id)
-
-    monkeypatch.setattr("easy_claw.workflows.document_runs.DeepAgentsRuntime", FakeRuntime)
-    monkeypatch.setattr(
-        "easy_claw.tools.documents._create_markitdown_converter",
-        lambda: FakeConverter(),
-    )
-    runner = CliRunner()
-
-    result = runner.invoke(app, ["docs", "summarize", "report.docx"])
-
-    assert result.exit_code == 0
-    assert "# Converted" in captured_prompts[0]
-    events = [
-        log.event_type for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
-    ]
-    assert "document_converted" in events
-
-
-def test_docs_summarize_dry_run_continues_after_unreadable_file(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "README.md").write_text("# Project", encoding="utf-8")
-    (tmp_path / "bad.txt").write_bytes(b"\xff\xfe\xff")
-    runner = CliRunner()
-
-    result = runner.invoke(app, ["docs", "summarize", "--dry-run", "README.md", "bad.txt"])
-
-    assert result.exit_code == 0
-    assert "# Project" in result.stdout
-    assert "bad.txt" in result.stdout
-
-
-def test_docs_summarize_dry_run_warns_for_outside_workspace_path(tmp_path, monkeypatch):
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    outside = tmp_path / "outside.md"
-    outside.write_text("# Outside", encoding="utf-8")
-    monkeypatch.chdir(workspace)
-    runner = CliRunner()
-
-    result = runner.invoke(app, ["docs", "summarize", "--dry-run", str(outside)])
-
-    assert result.exit_code == 0
-    assert "outside workspace" in result.stdout
-    assert "# Outside" in result.stdout
+    assert result.exit_code != 0
 
 
 def test_tools_search_prints_results(tmp_path, monkeypatch):
