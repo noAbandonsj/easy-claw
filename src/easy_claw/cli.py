@@ -1,15 +1,23 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+import json
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Annotated
 
 import typer
 import uvicorn
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
-from easy_claw.agent.runtime import AgentRequest, AgentResult, DeepAgentsRuntime, FakeAgentRuntime
+from easy_claw.agent.runtime import (
+    AgentRequest,
+    AgentResult,
+    DeepAgentsRuntime,
+    FakeAgentRuntime,
+    StreamEvent,
+)
 from easy_claw.config import load_config
 from easy_claw.skills import discover_skill_sources, discover_skills
 from easy_claw.storage.db import initialize_product_db
@@ -23,6 +31,7 @@ from easy_claw.workflows.document_runs import NoReadableDocumentsError, run_docu
 
 console = Console()
 DEFAULT_SKILLS_ROOT = Path("skills")
+STREAM_PANEL_VALUE_LIMIT = 1200
 app = typer.Typer(help="easy-claw — your personal AI assistant for Windows")
 skills_app = typer.Typer(help="Manage Markdown skills")
 memory_app = typer.Typer(help="Manage explicit product memory")
@@ -383,6 +392,60 @@ def tool_python(code: str) -> None:
         console.print(result.stderr)
     if result.exit_code != 0:
         raise typer.Exit(code=result.exit_code)
+
+
+def _render_streaming_turn(events: Iterable[StreamEvent]) -> None:
+    printed_token = False
+    for event in events:
+        if event.type == "token":
+            console.print(event.content, end="")
+            printed_token = True
+        elif event.type == "tool_call_start":
+            _print_stream_separator(printed_token)
+            console.print(
+                Panel(
+                    _format_stream_value(event.tool_args),
+                    title=f"Tool call: {event.tool_name or 'unknown'}",
+                )
+            )
+            printed_token = False
+        elif event.type == "tool_call_result":
+            _print_stream_separator(printed_token)
+            console.print(
+                Panel(
+                    _format_stream_value(event.content or event.tool_result),
+                    title=f"Tool result: {event.tool_name or 'unknown'}",
+                )
+            )
+            printed_token = False
+        elif event.type == "approval_required":
+            _print_stream_separator(printed_token)
+            console.print("Tool execution requires approval")
+            printed_token = False
+        elif event.type == "done":
+            if printed_token:
+                console.print()
+            printed_token = False
+
+
+def _print_stream_separator(printed_token: bool) -> None:
+    if printed_token:
+        console.print()
+
+
+def _format_stream_value(value: object) -> str:
+    if value is None:
+        text = ""
+    elif isinstance(value, str):
+        text = value
+    else:
+        try:
+            text = json.dumps(value, ensure_ascii=False, indent=2, default=str)
+        except TypeError:
+            text = str(value)
+    if len(text) <= STREAM_PANEL_VALUE_LIMIT:
+        return text
+    return text[:STREAM_PANEL_VALUE_LIMIT] + "\n[truncated]"
 
 
 def main() -> None:

@@ -1,8 +1,10 @@
 import json
+from io import StringIO
 
+from rich.console import Console
 from typer.testing import CliRunner
 
-from easy_claw.agent.runtime import AgentResult
+from easy_claw.agent.runtime import AgentResult, StreamEvent
 from easy_claw.cli import app
 from easy_claw.storage.repositories import AuditRepository
 from easy_claw.tools.commands import CommandResult
@@ -76,6 +78,43 @@ def test_chat_interactive_reuses_one_session_thread(tmp_path, monkeypatch):
     assert captured_requests[0].thread_id == captured_requests[1].thread_id
     sessions = AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
     assert [log.event_type for log in sessions].count("agent_run") == 2
+
+
+def test_render_streaming_turn_prints_tokens_and_tool_panels(monkeypatch):
+    output = StringIO()
+    test_console = Console(file=output, force_terminal=False, color_system=None, width=100)
+    monkeypatch.setattr("easy_claw.cli.console", test_console)
+
+    from easy_claw.cli import _render_streaming_turn
+
+    _render_streaming_turn(
+        iter(
+            [
+                StreamEvent(type="token", content="hello "),
+                StreamEvent(
+                    type="tool_call_start",
+                    tool_name="read_document",
+                    tool_args={"path": "README.md"},
+                ),
+                StreamEvent(
+                    type="tool_call_result",
+                    tool_name="read_document",
+                    tool_result="# Project",
+                    content="# Project",
+                ),
+                StreamEvent(type="token", content="world"),
+                StreamEvent(type="done", content="hello world"),
+            ]
+        )
+    )
+
+    rendered = output.getvalue()
+    assert "hello " in rendered
+    assert "world" in rendered
+    assert "Tool call: read_document" in rendered
+    assert "README.md" in rendered
+    assert "Tool result: read_document" in rendered
+    assert "# Project" in rendered
 
 
 def test_docs_summarize_dry_run_reads_document(tmp_path, monkeypatch):
