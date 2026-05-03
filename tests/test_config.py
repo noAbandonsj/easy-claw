@@ -9,6 +9,8 @@ def test_load_config_uses_local_data_dir(tmp_path, monkeypatch):
     monkeypatch.delenv("EASY_CLAW_EXECUTION_MODE", raising=False)
     monkeypatch.delenv("EASY_CLAW_BROWSER_ENABLED", raising=False)
     monkeypatch.delenv("EASY_CLAW_BROWSER_HEADLESS", raising=False)
+    monkeypatch.delenv("EASY_CLAW_MAX_MODEL_CALLS", raising=False)
+    monkeypatch.delenv("EASY_CLAW_MAX_TOOL_CALLS", raising=False)
 
     config = load_config(cwd=tmp_path)
 
@@ -19,6 +21,8 @@ def test_load_config_uses_local_data_dir(tmp_path, monkeypatch):
     assert config.execution_mode == "local"
     assert config.browser_enabled is False
     assert config.browser_headless is False
+    assert config.max_model_calls == 40
+    assert config.max_tool_calls == 100
 
 
 def test_load_config_reads_env_overrides(tmp_path, monkeypatch):
@@ -33,6 +37,8 @@ def test_load_config_reads_env_overrides(tmp_path, monkeypatch):
     monkeypatch.setenv("EASY_CLAW_EXECUTION_MODE", "local")
     monkeypatch.setenv("EASY_CLAW_BROWSER_ENABLED", "true")
     monkeypatch.setenv("EASY_CLAW_BROWSER_HEADLESS", "1")
+    monkeypatch.setenv("EASY_CLAW_MAX_MODEL_CALLS", "41")
+    monkeypatch.setenv("EASY_CLAW_MAX_TOOL_CALLS", "101")
 
     config = load_config(cwd=tmp_path)
 
@@ -45,6 +51,8 @@ def test_load_config_reads_env_overrides(tmp_path, monkeypatch):
     assert config.execution_mode == "local"
     assert config.browser_enabled is True
     assert config.browser_headless is True
+    assert config.max_model_calls == 41
+    assert config.max_tool_calls == 101
 
 
 def test_load_config_defaults_base_url_to_deepseek(tmp_path, monkeypatch):

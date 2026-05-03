@@ -6,8 +6,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from easy_claw.agent.middleware import build_agent_middleware
 from easy_claw.agent.toolset import build_easy_claw_tools
 from easy_claw.agent.types import CleanupCallback, ToolContext
+from easy_claw.defaults import DEFAULT_MAX_MODEL_CALLS, DEFAULT_MAX_TOOL_CALLS
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,8 @@ class AgentRequest:
     execution_mode: str = "local"
     browser_enabled: bool = False
     browser_headless: bool = False
+    max_model_calls: int | None = DEFAULT_MAX_MODEL_CALLS
+    max_tool_calls: int | None = DEFAULT_MAX_TOOL_CALLS
 
 
 @dataclass(frozen=True)
@@ -140,6 +144,10 @@ class DeepAgentsRuntime:
             tools=tool_bundle.tools,
             system_prompt=system_prompt,
             skills=list(request.skill_sources) or None,
+            middleware=build_agent_middleware(
+                max_model_calls=request.max_model_calls,
+                max_tool_calls=request.max_tool_calls,
+            ),
             backend=FilesystemBackend(root_dir=request.workspace_path, virtual_mode=True),
             checkpointer=checkpointer,
             interrupt_on=interrupt_on,

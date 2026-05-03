@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from langchain.agents.middleware import ModelCallLimitMiddleware, ToolCallLimitMiddleware
 from langgraph.types import Command
 
 from easy_claw.agent.runtime import (
@@ -171,6 +172,10 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
     assert captured["backend_root_dir"] == tmp_path
     assert captured["backend_virtual_mode"] is True
     assert captured["interrupt_on"] == {}
+    assert isinstance(captured["middleware"][0], ModelCallLimitMiddleware)
+    assert captured["middleware"][0].run_limit == 40
+    assert isinstance(captured["middleware"][1], ToolCallLimitMiddleware)
+    assert captured["middleware"][1].run_limit == 100
     assert len(captured["tools"]) == 5
     tool_names = {t.name for t in captured["tools"]}
     assert tool_names == {

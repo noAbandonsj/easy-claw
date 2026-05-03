@@ -7,6 +7,8 @@ from pathlib import Path
 
 from dotenv import dotenv_values, load_dotenv
 
+from easy_claw.defaults import DEFAULT_MAX_MODEL_CALLS, DEFAULT_MAX_TOOL_CALLS
+
 
 @dataclass(frozen=True)
 class AppConfig:
@@ -22,6 +24,8 @@ class AppConfig:
     execution_mode: str = "local"
     browser_enabled: bool = False
     browser_headless: bool = False
+    max_model_calls: int | None = DEFAULT_MAX_MODEL_CALLS
+    max_tool_calls: int | None = DEFAULT_MAX_TOOL_CALLS
 
 
 def _read_path(value: str | None, default: Path) -> Path:
@@ -34,6 +38,13 @@ def _read_bool(value: str | None, default: bool = False) -> bool:
     if value is None or value.strip() == "":
         return default
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _read_optional_int(value: str | None, default: int | None) -> int | None:
+    if value is None or value.strip() == "":
+        return default
+    parsed = int(value)
+    return parsed if parsed > 0 else None
 
 
 def load_config(
@@ -61,6 +72,14 @@ def load_config(
     execution_mode = (values.get("EASY_CLAW_EXECUTION_MODE") or "local").strip().lower()
     browser_enabled = _read_bool(values.get("EASY_CLAW_BROWSER_ENABLED"), default=False)
     browser_headless = _read_bool(values.get("EASY_CLAW_BROWSER_HEADLESS"), default=False)
+    max_model_calls = _read_optional_int(
+        values.get("EASY_CLAW_MAX_MODEL_CALLS"),
+        default=DEFAULT_MAX_MODEL_CALLS,
+    )
+    max_tool_calls = _read_optional_int(
+        values.get("EASY_CLAW_MAX_TOOL_CALLS"),
+        default=DEFAULT_MAX_TOOL_CALLS,
+    )
 
     return AppConfig(
         cwd=current_dir,
@@ -75,4 +94,6 @@ def load_config(
         execution_mode=execution_mode,
         browser_enabled=browser_enabled,
         browser_headless=browser_headless,
+        max_model_calls=max_model_calls,
+        max_tool_calls=max_tool_calls,
     )

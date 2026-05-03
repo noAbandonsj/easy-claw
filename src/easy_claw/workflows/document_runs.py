@@ -74,6 +74,8 @@ def run_document_task(
             execution_mode=config.execution_mode,
             browser_enabled=config.browser_enabled,
             browser_headless=config.browser_headless,
+            max_model_calls=config.max_model_calls,
+            max_tool_calls=config.max_tool_calls,
         )
     )
     audit_repo.record(

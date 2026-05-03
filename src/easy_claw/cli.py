@@ -64,6 +64,8 @@ def doctor() -> None:
     console.print(f"execution_mode: {config.execution_mode}")
     console.print(f"browser_enabled: {config.browser_enabled}")
     console.print(f"browser_headless: {config.browser_headless}")
+    console.print(f"max_model_calls: {config.max_model_calls}")
+    console.print(f"max_tool_calls: {config.max_tool_calls}")
     api_key_display = "***" + config.api_key[-4:] if config.api_key else "<not configured>"
     console.print(f"api_key: {api_key_display}")
 
@@ -164,6 +166,8 @@ def chat(
             execution_mode=config.execution_mode,
             browser_enabled=config.browser_enabled,
             browser_headless=config.browser_headless,
+            max_model_calls=config.max_model_calls,
+            max_tool_calls=config.max_tool_calls,
         )
     )
     audit_repo.record(
@@ -266,6 +270,8 @@ def _run_interactive_chat(*, dry_run: bool) -> None:
         execution_mode=config.execution_mode,
         browser_enabled=config.browser_enabled,
         browser_headless=config.browser_headless,
+        max_model_calls=config.max_model_calls,
+        max_tool_calls=config.max_tool_calls,
     )
     if dry_run:
         _run_interactive_loop(
@@ -346,6 +352,8 @@ def _agent_request_for_prompt(request: AgentRequest, prompt: str) -> AgentReques
         execution_mode=request.execution_mode,
         browser_enabled=request.browser_enabled,
         browser_headless=request.browser_headless,
+        max_model_calls=request.max_model_calls,
+        max_tool_calls=request.max_tool_calls,
     )
 
 

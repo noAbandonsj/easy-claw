@@ -207,6 +207,8 @@ v0.3 已实现可用的终端交互式助手和交互式流式输出，但以下
 ```env
 EASY_CLAW_APPROVAL_MODE=permissive
 EASY_CLAW_EXECUTION_MODE=local
+EASY_CLAW_MAX_MODEL_CALLS=40
+EASY_CLAW_MAX_TOOL_CALLS=100
 ```
 
 `permissive` 模式下，Agent 在对话中可以直接调用本地工具执行常规任务，例如运行 `pytest`、读取文件、执行临时 Python 片段和写 Markdown 报告。命令仍然有工作目录、超时、输出截断和审计日志，但不会默认弹出人工确认。
@@ -218,6 +220,8 @@ EASY_CLAW_APPROVAL_MODE=balanced
 ```
 
 `balanced` / `strict` 会对命令执行、Python 执行和文件写入启用人工确认。
+
+模型调用次数和工具调用次数由 LangChain middleware 限制，默认每轮最多 40 次模型调用、100 次工具调用。设置为 `0` 可以关闭对应限制。
 
 ---
 
@@ -262,6 +266,26 @@ easy-claw 保留自己的 Runtime / Session / Workspace / Checkpoint / Approval 
 - `easy_claw.tools.browser`：Playwright 浏览器工具和浏览器关闭逻辑。
 
 新增 Tavily、MCP、数据库、文件索引等工具时，优先新增独立工具文件并在 `agent/toolset.py` 注册，避免把工具构建细节散落到 config、CLI、runtime 和 workflow。
+
+`ToolBundle` 是工具层和 Runtime 的边界对象：
+
+- `tools`：暴露给 DeepAgents / LangChain 的工具列表。
+- `cleanup`：session 关闭时要执行的资源清理，例如关闭浏览器、MCP client 或数据库连接。
+- `interrupt_on`：需要人工审批的工具名。工具自己声明风险策略，Runtime 只根据 `EASY_CLAW_APPROVAL_MODE` 决定是否启用。
+
+示例：
+
+```python
+ToolBundle(
+    tools=[my_tool],
+    cleanup=(close_resource,),
+    interrupt_on={"my_risky_tool": True},
+)
+```
+
+Runtime 不直接维护具体工具名。新增风险工具时，应在对应工具 bundle 中声明 `interrupt_on`，不要回到 `runtime.py` 里硬编码工具列表。
+
+LangChain / DeepAgents 已经提供的 Agent 运行机制应优先复用，例如 agent loop、tool calling、streaming、checkpoint、`interrupt_on`、middleware、上下文总结、模型/工具调用次数限制和 fallback/retry。easy-claw 自己只保留本地应用层职责：配置读取、workspace 绑定、CLI/API、工具组合、浏览器生命周期和 SQLite 审计。
 
 ---
 
