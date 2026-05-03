@@ -269,7 +269,8 @@ def _run_interactive_loop(
         if stream_turn is not None:
             _render_streaming_turn(stream_turn(prompt))
         else:
-            result = run_turn(prompt)
+            with console.status("[dim]Thinking...[/]"):
+                result = run_turn(prompt)
             console.print(result.content)
 
         if audit_repo is not None:
@@ -374,7 +375,13 @@ def tool_python(code: str) -> None:
 
 def _render_streaming_turn(events: Iterable[StreamEvent]) -> None:
     printed_token = False
+    spinner = console.status("[dim]Thinking...[/]")
+    spinner.start()
+    spinner_running = True
     for event in events:
+        if spinner_running:
+            spinner.stop()
+            spinner_running = False
         if event.type == "token":
             console.print(event.content, end="")
             printed_token = True
@@ -384,6 +391,7 @@ def _render_streaming_turn(events: Iterable[StreamEvent]) -> None:
                 Panel(
                     _format_stream_value(event.tool_args),
                     title=f"Tool call: {event.tool_name or 'unknown'}",
+                    border_style="blue",
                 )
             )
             printed_token = False
@@ -393,14 +401,18 @@ def _render_streaming_turn(events: Iterable[StreamEvent]) -> None:
                 Panel(
                     _format_stream_value(event.content or event.tool_result),
                     title=f"Tool result: {event.tool_name or 'unknown'}",
+                    border_style="green",
                 )
             )
             printed_token = False
         elif event.type == "approval_required":
             _print_stream_separator(printed_token)
-            console.print("Tool execution requires approval")
+            console.print("[yellow]Tool execution requires approval[/]")
             printed_token = False
         elif event.type == "done":
+            if spinner_running:
+                spinner.stop()
+                spinner_running = False
             if printed_token:
                 console.print()
             printed_token = False
