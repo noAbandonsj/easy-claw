@@ -9,7 +9,6 @@ from easy_claw.agent.runtime import (
     FakeAgentRuntime,
     StaticApprovalReviewer,
     StreamEvent,
-    _build_browser_tool_context,
     _build_chat_model,
     _build_interrupt_on,
     _events_from_stream_item,
@@ -71,49 +70,6 @@ def test_build_interrupt_on_balanced_keeps_human_approval_for_risky_tools():
         "run_python",
         "write_report",
     }
-
-
-def test_build_browser_tool_context_skips_browser_when_disabled():
-    context = _build_browser_tool_context(enabled=False, headless=False)
-
-    assert context.tools == []
-    assert context.browser is None
-
-
-def test_build_browser_tool_context_creates_langchain_playwright_tools(monkeypatch):
-    captured = {}
-    fake_browser = object()
-    fake_tools = [object(), object()]
-
-    def fake_create_browser(*, headless):
-        captured["headless"] = headless
-        return fake_browser
-
-    class FakeToolkit:
-        @classmethod
-        def from_browser(cls, *, sync_browser):
-            captured["sync_browser"] = sync_browser
-            return cls()
-
-        def get_tools(self):
-            return fake_tools
-
-    monkeypatch.setattr(
-        "easy_claw.agent.runtime.create_sync_playwright_browser",
-        fake_create_browser,
-        raising=False,
-    )
-    monkeypatch.setattr(
-        "easy_claw.agent.runtime.PlayWrightBrowserToolkit",
-        FakeToolkit,
-        raising=False,
-    )
-
-    context = _build_browser_tool_context(enabled=True, headless=True)
-
-    assert captured == {"headless": True, "sync_browser": fake_browser}
-    assert context.tools == fake_tools
-    assert context.browser is fake_browser
 
 
 @dataclass
@@ -227,10 +183,10 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
     assert "Use Chinese." in captured["system_prompt"]
 
 
-def test_deepagents_runtime_adds_browser_tools_when_enabled(tmp_path, monkeypatch):
+def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkeypatch):
     captured = {}
-    fake_browser = object()
     fake_browser_tool = object()
+    cleanup_calls = []
 
     class FakeBackend:
         def __init__(self, *, root_dir, virtual_mode):
@@ -244,13 +200,15 @@ def test_deepagents_runtime_adds_browser_tools_when_enabled(tmp_path, monkeypatc
         captured.update(kwargs)
         return FakeDeepAgent()
 
-    def fake_browser_context(*, enabled, headless):
-        captured["browser_enabled"] = enabled
-        captured["browser_headless"] = headless
+    def fake_build_easy_claw_tools(context):
+        captured["tool_context"] = context
         return type(
-            "FakeBrowserContext",
+            "FakeToolBundle",
             (),
-            {"tools": [fake_browser_tool], "browser": fake_browser},
+            {
+                "tools": [fake_browser_tool],
+                "cleanup": (lambda: cleanup_calls.append("cleanup"),),
+            },
         )()
 
     monkeypatch.setattr(
@@ -259,7 +217,10 @@ def test_deepagents_runtime_adds_browser_tools_when_enabled(tmp_path, monkeypatc
     )
     monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
     monkeypatch.setattr("deepagents.backends.FilesystemBackend", FakeBackend)
-    monkeypatch.setattr("easy_claw.agent.runtime._build_browser_tool_context", fake_browser_context)
+    monkeypatch.setattr(
+        "easy_claw.agent.runtime.build_easy_claw_tools",
+        fake_build_easy_claw_tools,
+    )
 
     with DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True)).open_session(
         AgentRequest(
@@ -277,9 +238,12 @@ def test_deepagents_runtime_adds_browser_tools_when_enabled(tmp_path, monkeypatc
         result = session.run("hello")
 
     assert result.content == "done"
-    assert captured["browser_enabled"] is True
-    assert captured["browser_headless"] is True
+    assert captured["tool_context"].workspace_path == tmp_path
+    assert captured["tool_context"].cwd == tmp_path
+    assert captured["tool_context"].browser_enabled is True
+    assert captured["tool_context"].browser_headless is True
     assert fake_browser_tool in captured["tools"]
+    assert cleanup_calls == ["cleanup"]
 
 
 def test_deepagents_session_reuses_agent_between_turns(tmp_path, monkeypatch):

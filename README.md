@@ -246,11 +246,26 @@ EASY_CLAW_BROWSER_HEADLESS=false
 - **Local first**：默认本机运行，SQLite 存储，无需云服务。
 - **uv managed**：依赖管理、虚拟环境和命令入口统一由 `uv` 处理。
 - **Reuse first**：Agent 编排复用 LangChain/LangGraph，不自行实现编排引擎。
+- **Toolset first**：新增工具优先放在 `easy_claw.tools`，再由 `easy_claw.agent.toolset` 统一注册，Runtime 只负责会话、checkpoint、审批和流式输出。
 - **Usability first**：默认优先可用性，让 Agent 能主动读文件、运行测试、执行 Python 和写报告；需要更谨慎时可切换审批模式。
 
 ---
 
-## 当前版本范围（v0.2）
+## 工具接入结构
+
+easy-claw 保留自己的 Runtime / Session / Workspace / Checkpoint / Approval / SQLite 审计等应用层能力，但工具接入采用更薄的组合层：
+
+- `easy_claw.agent.runtime`：创建 DeepAgent，绑定 workspace、checkpoint、审批和 session 生命周期。
+- `easy_claw.agent.toolset`：`build_easy_claw_tools(context)` 统一收集当前 session 可用工具。
+- `easy_claw.agent.types`：定义 `ToolContext` / `ToolBundle`，工具可以附带清理回调。
+- `easy_claw.tools.core`：搜索、命令执行、Python、文档读取、报告写入等核心工具。
+- `easy_claw.tools.browser`：Playwright 浏览器工具和浏览器关闭逻辑。
+
+新增 Tavily、MCP、数据库、文件索引等工具时，优先新增独立工具文件并在 `agent/toolset.py` 注册，避免把工具构建细节散落到 config、CLI、runtime 和 workflow。
+
+---
+
+## 当前版本范围（v0.3）
 
 已包含：
 
@@ -296,10 +311,14 @@ easy-claw/
         main.py
       agent/
         runtime.py
+        toolset.py
+        types.py
       storage/
         db.py
         repositories.py
       tools/
+        browser.py
+        core.py
         commands.py
         documents.py
         python_runner.py
