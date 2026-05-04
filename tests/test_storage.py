@@ -1,7 +1,6 @@
 from easy_claw.storage.db import connect_product_db, initialize_product_db
 from easy_claw.storage.repositories import (
     AuditRepository,
-    MemoryRepository,
     SessionRecord,
     SessionRepository,
 )
@@ -63,17 +62,6 @@ def test_session_repository_gets_session_by_id(tmp_path):
     assert isinstance(result, SessionRecord)
     assert result.id == first.id
     assert repo.get_session("missing") is None
-
-
-def test_memory_repository_round_trips_memory_items(tmp_path):
-    db_path = tmp_path / "easy-claw.db"
-    initialize_product_db(db_path)
-    repo = MemoryRepository(db_path)
-
-    item = repo.remember(scope="project", key="decision", content="CLI first")
-
-    assert repo.list_memory()[0].id == item.id
-    assert repo.list_memory()[0].content == "CLI first"
 
 
 def test_audit_repository_lists_records(tmp_path):

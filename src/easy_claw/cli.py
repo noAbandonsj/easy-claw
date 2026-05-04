@@ -24,7 +24,7 @@ from easy_claw.agent.runtime import (
 from easy_claw.config import load_config
 from easy_claw.skills import discover_skill_sources, discover_skills
 from easy_claw.storage.db import initialize_product_db
-from easy_claw.storage.repositories import AuditRepository, MemoryRepository, SessionRecord, SessionRepository
+from easy_claw.storage.repositories import AuditRepository, SessionRecord, SessionRepository
 from easy_claw.tools.base import ToolExecutionError
 from easy_claw.tools.commands import run_command
 from easy_claw.tools.python_runner import run_python_code
@@ -36,13 +36,11 @@ STREAM_PANEL_VALUE_LIMIT = 1200
 app = typer.Typer(help="easy-claw - your personal AI assistant for Windows")
 dev_app = typer.Typer(help="Developer and debugging commands")
 skills_app = typer.Typer(help="Manage Markdown skills")
-memory_app = typer.Typer(help="Manage explicit product memory")
 tools_app = typer.Typer(help="Run local power tools")
 sessions_app = typer.Typer(help="Manage chat sessions")
 app.add_typer(sessions_app, name="sessions", rich_help_panel="Management")
 app.add_typer(dev_app, name="dev", rich_help_panel="Development")
 dev_app.add_typer(skills_app, name="skills")
-dev_app.add_typer(memory_app, name="memory")
 dev_app.add_typer(tools_app, name="tools")
 
 
@@ -198,17 +196,6 @@ def list_skills(
     console.print(table)
 
 
-@memory_app.command("list")
-def list_memory() -> None:
-    """List explicit product memory items."""
-    config = load_config()
-    initialize_product_db(config.product_db_path)
-    table = Table("Scope", "Key", "Content", "Source")
-    for item in MemoryRepository(config.product_db_path).list_memory():
-        table.add_row(item.scope, item.key, item.content, item.source)
-    console.print(table)
-
-
 @app.command(rich_help_panel="Management")
 def serve(
     host: str = typer.Option("127.0.0.1", "--host"),
@@ -261,14 +248,12 @@ def chat(
         title=prompt[:60] or "Chat",
     )
     skill_sources = discover_skill_sources(config.cwd / "skills", config.default_workspace)
-    memories = [item.content for item in MemoryRepository(config.product_db_path).list_memory()]
     result = DeepAgentsRuntime().run(
         AgentRequest(
             prompt=prompt,
             thread_id=session.id,
             config=config,
             skill_sources=skill_sources,
-            memories=memories,
         )
     )
     audit_repo.record(
@@ -312,7 +297,6 @@ def _run_interactive_chat(
     initialize_product_db(config.product_db_path)
     audit_repo = AuditRepository(config.product_db_path)
     skill_sources = discover_skill_sources(config.cwd / "skills", config.default_workspace)
-    memories = [item.content for item in MemoryRepository(config.product_db_path).list_memory()]
     runtime = DeepAgentsRuntime()
     conversation: list[tuple[str, str]] = []
     token_usage: dict[str, int] = {}
@@ -337,7 +321,6 @@ def _run_interactive_chat(
             thread_id=thread_id,
             config=config,
             skill_sources=skill_sources,
-            memories=memories,
         )
 
         if open_session is None:

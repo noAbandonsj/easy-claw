@@ -24,17 +24,6 @@ class SessionRecord:
 
 
 @dataclass(frozen=True)
-class MemoryItem:
-    id: str
-    scope: str
-    key: str
-    content: str
-    source: str
-    created_at: str
-    updated_at: str
-
-
-@dataclass(frozen=True)
 class AuditLog:
     id: str
     event_type: str
@@ -111,58 +100,6 @@ class SessionRepository:
         if row is None:
             return None
         return SessionRecord(**dict(row))
-
-
-class MemoryRepository:
-    def __init__(self, db_path: Path) -> None:
-        self._db_path = db_path
-
-    def remember(
-        self,
-        *,
-        scope: str,
-        key: str,
-        content: str,
-        source: str = "user",
-    ) -> MemoryItem:
-        timestamp = _now()
-        record = MemoryItem(
-            id=str(uuid4()),
-            scope=scope,
-            key=key,
-            content=content,
-            source=source,
-            created_at=timestamp,
-            updated_at=timestamp,
-        )
-        with connect_product_db(self._db_path) as connection:
-            connection.execute(
-                """
-                INSERT INTO memory_items (id, scope, key, content, source, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    record.id,
-                    record.scope,
-                    record.key,
-                    record.content,
-                    record.source,
-                    record.created_at,
-                    record.updated_at,
-                ),
-            )
-        return record
-
-    def list_memory(self) -> list[MemoryItem]:
-        with connect_product_db(self._db_path) as connection:
-            rows = connection.execute(
-                """
-                SELECT id, scope, key, content, source, created_at, updated_at
-                FROM memory_items
-                ORDER BY updated_at DESC
-                """
-            ).fetchall()
-        return [MemoryItem(**dict(row)) for row in rows]
 
 
 class AuditRepository:

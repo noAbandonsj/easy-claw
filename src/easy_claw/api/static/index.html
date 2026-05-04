@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>easy-claw</title>
+<style>
+:root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --dim: #8b949e;
+    --pink: #ff69b4;
+    --pink-deep: #ff1493;
+    --cyan: #00bcd4;
+    --blue: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d2991d;
+    --red: #f85149;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#banner {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+#banner .logo {
+    color: var(--pink);
+    font-weight: 700;
+    font-size: 16px;
+    white-space: nowrap;
+}
+#banner .info {
+    font-size: 12px;
+    color: var(--dim);
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+#banner .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    flex-shrink: 0;
+}
+#banner .dot.disconnected { background: var(--red); }
+#messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.message {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    line-height: 1.55;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+.message.user {
+    align-self: flex-end;
+    background: var(--pink-deep);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+}
+.message.assistant {
+    align-self: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+    min-width: 60px;
+}
+.message.assistant .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 16px;
+    background: var(--pink);
+    animation: blink 1s step-end infinite;
+    vertical-align: text-bottom;
+    margin-left: 2px;
+}
+@keyframes blink { 50% { opacity: 0; } }
+.tool-panel {
+    align-self: stretch;
+    border: 1px solid var(--blue);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 4px 0;
+}
+.tool-panel.result { border-color: var(--green); }
+.tool-panel .header {
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+}
+.tool-panel .header.call { background: rgba(88,166,255,0.1); color: var(--blue); }
+.tool-panel .header.result { background: rgba(63,185,80,0.1); color: var(--green); }
+.tool-panel .body {
+    padding: 8px 12px;
+    font-size: 13px;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    background: rgba(0,0,0,0.2);
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    display: none;
+}
+.tool-panel.open .body { display: block; }
+.tool-panel .arrow { transition: transform 0.15s; }
+.tool-panel.open .arrow { transform: rotate(90deg); }
+#status-line {
+    font-size: 11px;
+    color: var(--dim);
+    padding: 4px 20px;
+    text-align: center;
+    flex-shrink: 0;
+    min-height: 20px;
+}
+#input-area {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-shrink: 0;
+}
+#input-area textarea {
+    flex: 1;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: none;
+    min-height: 42px;
+    max-height: 160px;
+    line-height: 1.4;
+    outline: none;
+    transition: border-color 0.15s;
+}
+#input-area textarea:focus { border-color: var(--pink); }
+#input-area button {
+    background: var(--pink);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+#input-area button:hover { background: var(--pink-deep); }
+#input-area button:disabled { background: var(--border); cursor: not-allowed; }
+.modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 480px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+.modal h2 { color: var(--pink); margin-bottom: 12px; font-size: 18px; }
+.modal table { width: 100%; border-collapse: collapse; }
+.modal td { padding: 6px 0; font-size: 14px; }
+.modal td:first-child { color: var(--cyan); font-weight: 600; font-family: monospace; width: 120px; }
+.modal .close {
+    margin-top: 16px;
+    background: var(--pink);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 20px;
+    font-size: 14px;
+    cursor: pointer;
+}
+.modal .close:hover { background: var(--pink-deep); }
+</style>
+</head>
+<body>
+
+<div id="banner">
+    <span class="dot" id="conn-dot"></span>
+    <span class="logo">easy-claw</span>
+    <span class="info" id="banner-info">connecting...</span>
+</div>
+
+<div id="messages"></div>
+<div id="status-line"></div>
+
+<div id="input-area">
+    <textarea id="input" rows="1" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" disabled></textarea>
+    <button id="send-btn" disabled>发送</button>
+</div>
+
+<div class="modal-overlay" id="modal-overlay">
+    <div class="modal" id="modal-content"></div>
+</div>
+
+<script>
+const WS_URL = 'ws://' + location.host + '/ws/chat';
+const msgEl = document.getElementById('messages');
+const inputEl = document.getElementById('input');
+const sendBtn = document.getElementById('send-btn');
+const statusEl = document.getElementById('status-line');
+const dotEl = document.getElementById('conn-dot');
+const bannerInfo = document.getElementById('banner-info');
+const modalOverlay = document.getElementById('modal-overlay');
+const modalContent = document.getElementById('modal-content');
+
+let ws = null;
+let currentAssistant = null;
+let modelName = '';
+let workspace = '';
+let version = '';
+let sessionId = '';
+let turnCount = 0;
+let totalTokens = {};
+
+function connect() {
+    ws = new WebSocket(WS_URL);
+    ws.onopen = () => {
+        dotEl.classList.remove('disconnected');
+        inputEl.disabled = false;
+        sendBtn.disabled = false;
+    };
+    ws.onclose = () => {
+        dotEl.classList.add('disconnected');
+        inputEl.disabled = true;
+        sendBtn.disabled = true;
+        statusEl.textContent = 'disconnected — reconnecting in 2s...';
+        setTimeout(connect, 2000);
+    };
+    ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        handleMessage(msg);
+    };
+}
+
+function handleMessage(msg) {
+    switch (msg.type) {
+        case 'banner':
+            modelName = msg.model || '';
+            workspace = msg.workspace || '';
+            version = msg.version || '';
+            sessionId = msg.session_id || '';
+            bannerInfo.textContent = 'model: ' + modelName + ' | workspace: ' + workspace + ' | v' + version + ' | ' + sessionId;
+            statusEl.textContent = 'ready';
+            break;
+        case 'token':
+            appendToken(msg.content);
+            break;
+        case 'tool_call_start':
+            finishAssistant();
+            addToolPanel('call', msg.tool_name, msg.tool_args);
+            break;
+        case 'tool_call_result':
+            addToolPanel('result', msg.tool_name, msg.tool_result || msg.content);
+            break;
+        case 'approval_required':
+            finishAssistant();
+            statusEl.textContent = 'tool approval required (auto-approved)';
+            break;
+        case 'done':
+            finishAssistant();
+            if (msg.usage) {
+                totalTokens = msg.usage;
+                statusEl.textContent = 'tokens: ' + (msg.usage.input||0) + ' in / ' + (msg.usage.output||0) + ' out / ' + (msg.usage.total||0) + ' total';
+            }
+            turnCount++;
+            break;
+        case 'error':
+            finishAssistant();
+            statusEl.textContent = 'error: ' + msg.content;
+            break;
+    }
+    scrollBottom();
+}
+
+function appendToken(text) {
+    if (!currentAssistant) {
+        currentAssistant = document.createElement('div');
+        currentAssistant.className = 'message assistant';
+        currentAssistant.innerHTML = '<span class="cursor"></span>';
+        msgEl.appendChild(currentAssistant);
+    }
+    const cursor = currentAssistant.querySelector('.cursor');
+    cursor.before(document.createTextNode(text));
+}
+
+function finishAssistant() {
+    const cursor = currentAssistant ? currentAssistant.querySelector('.cursor') : null;
+    if (cursor) cursor.remove();
+    currentAssistant = null;
+}
+
+function addToolPanel(kind, name, content) {
+    const panel = document.createElement('div');
+    panel.className = 'tool-panel' + (kind === 'result' ? ' result' : '') + ' open';
+    const displayName = name || 'unknown';
+    const label = kind === 'call' ? 'Tool call: ' + displayName : 'Tool result: ' + displayName;
+    const formatted = formatContent(content);
+    panel.innerHTML =
+        '<div class="header ' + kind + '" onclick="togglePanel(this.parentElement)">' +
+        '<span>' + label + '</span>' +
+        '<span class="arrow">&#9654;</span>' +
+        '</div>' +
+        '<div class="body">' + escapeHtml(formatted) + '</div>';
+    msgEl.appendChild(panel);
+}
+
+function togglePanel(panel) {
+    panel.classList.toggle('open');
+}
+
+function formatContent(val) {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'string') return val;
+    try { return JSON.stringify(val, null, 2); } catch (e) { return String(val); }
+}
+
+function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function scrollBottom() {
+    msgEl.scrollTop = msgEl.scrollHeight;
+}
+
+function send() {
+    const text = inputEl.value;
+    if (!text.trim() || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+    if (text.startsWith('/')) {
+        handleSlash(text.trim());
+        inputEl.value = '';
+        return;
+    }
+
+    // User message bubble
+    const userMsg = document.createElement('div');
+    userMsg.className = 'message user';
+    userMsg.textContent = text;
+    msgEl.appendChild(userMsg);
+
+    ws.send(text);
+    inputEl.value = '';
+    inputEl.style.height = '';
+    statusEl.textContent = 'thinking...';
+}
+
+function handleSlash(cmd) {
+    switch (cmd) {
+        case '/help':
+            showModal(
+                '<h2>Commands</h2>' +
+                '<table>' +
+                '<tr><td>/help</td><td>Show this help</td></tr>' +
+                '<tr><td>/clear</td><td>Clear the conversation view</td></tr>' +
+                '<tr><td>/status</td><td>Show session info</td></tr>' +
+                '<tr><td>/save</td><td>Download conversation as Markdown</td></tr>' +
+                '<tr><td>exit, quit</td><td>Disconnect</td></tr>' +
+                '</table>' +
+                '<p style="margin-top:12px;font-size:13px;color:var(--dim)">/workspace switching is available in CLI mode.</p>'
+            );
+            break;
+        case '/clear':
+            msgEl.innerHTML = '';
+            statusEl.textContent = 'conversation cleared (server session kept)';
+            break;
+        case '/status':
+            showModal(
+                '<h2>Session Status</h2>' +
+                '<table>' +
+                '<tr><td>Model</td><td>' + modelName + '</td></tr>' +
+                '<tr><td>Workspace</td><td>' + workspace + '</td></tr>' +
+                '<tr><td>Version</td><td>' + version + '</td></tr>' +
+                '<tr><td>Session</td><td>' + sessionId + '</td></tr>' +
+                '<tr><td>Turns</td><td>' + turnCount + '</td></tr>' +
+                '<tr><td>Tokens</td><td>' + (totalTokens.total || 0).toLocaleString() + '</td></tr>' +
+                '</table>'
+            );
+            break;
+        case '/save':
+            downloadMarkdown();
+            break;
+        default:
+            if (cmd.startsWith('/workspace')) {
+                statusEl.textContent = 'Workspace switching is CLI-only. Use "uv run easy-claw chat --interactive" for /workspace.';
+            } else {
+                statusEl.textContent = 'Unknown command: ' + cmd;
+            }
+    }
+}
+
+function showModal(html) {
+    modalContent.innerHTML = html + '<button class="close" onclick="closeModal()">Close</button>';
+    modalOverlay.classList.add('show');
+}
+
+function closeModal() {
+    modalOverlay.classList.remove('show');
+}
+
+modalOverlay.addEventListener('click', (e) => {
+    if (e.target === modalOverlay) closeModal();
+});
+
+function downloadMarkdown() {
+    const parts = ['# easy-claw Conversation\n',
+        '\n- **Session:** `' + sessionId + '`',
+        '- **Model:** ' + modelName,
+        '- **Workspace:** ' + workspace,
+        '- **Exported:** ' + new Date().toISOString().replace('T',' ').slice(0,19),
+        '\n---\n'];
+    const children = msgEl.children;
+    for (let i = 0; i < children.length; i++) {
+        const el = children[i];
+        if (el.classList.contains('message')) {
+            const role = el.classList.contains('user') ? '**You:**' : '**easy-claw:**';
+            parts.push('\n' + role + '\n\n' + el.textContent + '\n');
+        } else if (el.classList.contains('tool-panel')) {
+            const header = el.querySelector('.header')?.textContent || 'Tool';
+            const body = el.querySelector('.body')?.textContent || '';
+            parts.push('\n> ' + header + '\n> \n> ' + body.replace(/\n/g, '\n> ') + '\n');
+        }
+    }
+    const blob = new Blob([parts.join('\n')], {type: 'text/markdown'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'easy-claw-' + sessionId + '.md';
+    a.click();
+    statusEl.textContent = 'conversation downloaded';
+}
+
+inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+    }
+});
+
+inputEl.addEventListener('input', () => {
+    inputEl.style.height = '';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
+});
+
+sendBtn.addEventListener('click', send);
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeModal();
+});
+
+connect();
+</script>
+</body>
+</html>

@@ -20,7 +20,6 @@ class AgentRequest:
     config: AppConfig | None
     workspace_path: Path | None = None
     skill_sources: Sequence[str] = field(default_factory=tuple)
-    memories: Sequence[str] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
@@ -113,7 +112,7 @@ class DeepAgentsRuntime:
             raise RuntimeError("checkpoint_db_path is required for DeepAgentsRuntime.")
 
         cfg.checkpoint_db_path.parent.mkdir(parents=True, exist_ok=True)
-        system_prompt = _build_system_prompt(request.memories)
+        system_prompt = _build_system_prompt()
         workspace_path = request.workspace_path or cfg.default_workspace
 
         from deepagents import create_deep_agent
@@ -228,20 +227,18 @@ def _build_interrupt_on(
     return {}
 
 
-def _build_system_prompt(memories: Sequence[str]) -> str:
-    sections = [
+def _build_system_prompt() -> str:
+    return "\n\n".join([
         "You are easy-claw, an agent-first Windows personal code assistant.",
         "The user should describe tasks naturally; do not ask them to manually run "
         "docs/tools/dev commands.",
         "Use available tools proactively to read files, run tests, inspect projects, "
         "and search the web.",
         "Operate inside the selected workspace unless the user explicitly asks for another path.",
-    ]
-    if memories:
-        sections.append(
-            "Explicit product memories:\n" + "\n".join(f"- {memory}" for memory in memories)
-        )
-    return "\n\n".join(sections)
+        "You have access to Basic Memory tools (write_note, search_notes, read_note, etc.) "
+        "if configured via MCP. Use them to remember important facts and search for past "
+        "information across sessions.",
+    ])
 
 
 def _extract_last_message_info(result: object) -> tuple[str, dict[str, int] | None]:

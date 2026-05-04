@@ -15,16 +15,6 @@ CREATE TABLE IF NOT EXISTS sessions (
     updated_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS memory_items (
-    id TEXT PRIMARY KEY,
-    scope TEXT NOT NULL,
-    key TEXT NOT NULL,
-    content TEXT NOT NULL,
-    source TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS audit_logs (
     id TEXT PRIMARY KEY,
     event_type TEXT NOT NULL,

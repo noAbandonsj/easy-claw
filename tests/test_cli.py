@@ -166,7 +166,6 @@ def test_top_level_developer_command_aliases_are_removed():
 
     assert runner.invoke(app, ["tools", "search", "DeepSeek"]).exit_code != 0
     assert runner.invoke(app, ["skills", "list"]).exit_code != 0
-    assert runner.invoke(app, ["memory", "list"]).exit_code != 0
 
 
 def test_dev_tools_search_prints_results(tmp_path, monkeypatch):

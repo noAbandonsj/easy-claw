@@ -176,7 +176,6 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
             thread_id="thread-1",
             config=config,
             skill_sources=["/skills/core/"],
-            memories=["Use Chinese."],
         )
     )
 
@@ -198,7 +197,6 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
         "run_python",
         "read_document",
     }
-    assert "Use Chinese." in captured["system_prompt"]
 
 
 def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkeypatch):
