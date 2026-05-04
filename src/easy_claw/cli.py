@@ -408,10 +408,10 @@ def _run_interactive_loop(
 
     while True:
         try:
-            console.print(Rule(style="pink"))
+            console.print(Rule(style="hot_pink"))
             console.print("  [bold cyan]>[/] ", end="")
             prompt = input().strip()
-            console.print(Rule(style="pink"))
+            console.print(Rule(style="hot_pink"))
         except EOFError:
             console.print()
             break
