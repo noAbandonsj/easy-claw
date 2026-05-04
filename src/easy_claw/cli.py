@@ -368,8 +368,17 @@ def _run_interactive_chat(
 
         if not restart:
             break
-        thread_id = None  # /clear: create a new session next iteration
-        console.print("[dim]Conversation cleared. Starting fresh.[/]")
+        if restart.startswith("/workspace "):
+            new_path = Path(restart[len("/workspace "):]).resolve()
+            if not new_path.is_dir():
+                console.print(f"[yellow]Not a directory: {new_path}[/]")
+                continue
+            config = dataclasses.replace(config, default_workspace=new_path)
+            # Keep thread_id — preserve conversation across workspace switches
+            console.print(f"[dim]Workspace changed to {new_path}[/]")
+        else:
+            thread_id = None  # /clear: create a new session next iteration
+            console.print("[dim]Conversation cleared. Starting fresh.[/]")
 
 
 def _run_interactive_loop(
@@ -379,8 +388,14 @@ def _run_interactive_loop(
     session_id: str,
     stream_turn: Callable[[str], Iterable[StreamEvent]] | None = None,
     supports_clear: bool = False,
-) -> bool:
-    """Run the REPL loop. Returns True if the caller should restart with a fresh session."""
+) -> str | None:
+    """Run the REPL loop.
+
+    Returns:
+        None if the user quit.
+        \"clear\" if the caller should restart with a fresh session.
+        \"/workspace <path>\" if the caller should switch workspace.
+    """
     while True:
         try:
             console.print("  [bold cyan]easy-claw>[/] ", end="")
@@ -394,9 +409,18 @@ def _run_interactive_loop(
             continue
         if prompt.lower() == "/clear":
             if supports_clear:
-                return True
+                return "clear"
             console.print("[dim]History clearing is not supported in dry-run mode.[/]")
             continue
+        if prompt.lower().startswith("/workspace"):
+            if not supports_clear:
+                console.print("[dim]Workspace switching is not supported in dry-run mode.[/]")
+                continue
+            parts = prompt.split(maxsplit=1)
+            if len(parts) < 2 or not parts[1].strip():
+                console.print("[yellow]Usage: /workspace <path>[/]")
+                continue
+            return f"/workspace {parts[1].strip()}"
 
         if stream_turn is not None:
             _render_streaming_turn(stream_turn(prompt))
@@ -412,7 +436,7 @@ def _run_interactive_loop(
                 payload={"session_id": session_id, "prompt_length": len(prompt)},
             )
 
-    return False
+    return None
 
 
 def _agent_request_for_prompt(request: AgentRequest, prompt: str) -> AgentRequest:
@@ -597,7 +621,7 @@ def _render_startup_banner(config: "AppConfig") -> None:  # noqa: F821
         border_style="cyan",
     )
     console.print(banner)
-    console.print("[dim]Type :q, exit or quit to leave. /clear to reset conversation. Empty line to skip.[/]")
+    console.print("[dim]:q/exit/quit to leave, /clear to reset, /workspace <path> to switch dir, empty to skip.[/]")
     console.print()
 
 
