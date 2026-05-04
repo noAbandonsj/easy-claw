@@ -1,6 +1,5 @@
 import pytest
 
-from easy_claw.agent.types import ToolBundle
 from easy_claw.tools.base import ToolExecutionError
 from easy_claw.tools.mcp import build_mcp_tools
 

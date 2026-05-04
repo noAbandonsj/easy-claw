@@ -9,7 +9,6 @@ from easy_claw.tools.search import (
     search_web,
 )
 
-
 # ---------------------------------------------------------------------------
 # Existing tests (adapted to keyword-only max_results)
 # ---------------------------------------------------------------------------

@@ -266,7 +266,7 @@ def chat(
 def _run_interactive_chat(
     *,
     dry_run: bool,
-    config: "AppConfig",  # noqa: F821
+    config: AppConfig,  # noqa: F821
     resume_thread_id: str | None = None,
 ) -> None:
     if not dry_run and config.model is None:
@@ -373,7 +373,7 @@ def _run_interactive_loop(
     session_id: str,
     stream_turn: Callable[[str], Iterable[StreamEvent]] | None = None,
     supports_clear: bool = False,
-    session_config: "AppConfig | None" = None,  # noqa: F821
+    session_config: AppConfig | None = None,  # noqa: F821
     conversation: list[tuple[str, str]] | None = None,
     token_usage: dict[str, int] | None = None,
 ) -> str | None:
@@ -594,34 +594,34 @@ def _write_conversation_markdown(
     conversation: list[tuple[str, str]],
     path: Path,
     session_id: str,
-    config: "AppConfig | None",  # noqa: F821
+    config: AppConfig | None,  # noqa: F821
 ) -> None:
     from datetime import datetime
 
     lines: list[str] = []
-    lines.append(f"# easy-claw Conversation")
-    lines.append(f"")
+    lines.append("# easy-claw Conversation")
+    lines.append("")
     lines.append(f"- **Session:** `{session_id}`")
     lines.append(f"- **Model:** {config.model if config else 'N/A'}")
     lines.append(f"- **Workspace:** {config.default_workspace if config else 'N/A'}")
     lines.append(f"- **Exported:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    lines.append(f"")
-    lines.append(f"---")
-    lines.append(f"")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
 
     for i, (user_msg, assistant_msg) in enumerate(conversation, 1):
         lines.append(f"### Turn {i}")
-        lines.append(f"")
-        lines.append(f"**You:**")
-        lines.append(f"")
+        lines.append("")
+        lines.append("**You:**")
+        lines.append("")
         lines.append(f"{user_msg}")
-        lines.append(f"")
-        lines.append(f"**easy-claw:**")
-        lines.append(f"")
+        lines.append("")
+        lines.append("**easy-claw:**")
+        lines.append("")
         lines.append(f"{assistant_msg}")
-        lines.append(f"")
-        lines.append(f"---")
-        lines.append(f"")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")
@@ -643,7 +643,7 @@ def _print_help() -> None:
 
 def _print_session_status(
     session_id: str,
-    config: "AppConfig | None",  # noqa: F821
+    config: AppConfig | None,  # noqa: F821
     conversation: list[tuple[str, str]],
     token_usage: dict[str, int] | None = None,
 ) -> None:
@@ -689,7 +689,7 @@ def _count_mcp_servers(config_path: str) -> int:
     return 0
 
 
-def _render_startup_banner(config: "AppConfig") -> None:  # noqa: F821
+def _render_startup_banner(config: AppConfig) -> None:  # noqa: F821
     """Render a startup banner showing current configuration."""
     approval_color = {"permissive": "green", "balanced": "yellow", "strict": "red"}
     color = approval_color.get(config.approval_mode, "white")

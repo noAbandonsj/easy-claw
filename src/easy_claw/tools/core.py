@@ -5,7 +5,8 @@ from pathlib import Path
 from langchain_core.tools import tool
 
 from easy_claw.agent.types import ToolBundle
-from easy_claw.tools.commands import CommandResult, run_command as _run_command
+from easy_claw.tools.commands import CommandResult
+from easy_claw.tools.commands import run_command as _run_command
 from easy_claw.tools.documents import read_workspace_document as _read_workspace_document
 from easy_claw.tools.python_runner import run_python_code as _run_python_code
 from easy_claw.tools.search import search_web as _search_web

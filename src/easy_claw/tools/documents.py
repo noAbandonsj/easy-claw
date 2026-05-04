@@ -4,7 +4,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from easy_claw.tools.base import ToolExecutionError
-from easy_claw.workspace import is_outside_workspace, normalize_path, relative_to_root, resolve_user_path
+from easy_claw.workspace import (
+    is_outside_workspace,
+    normalize_path,
+    relative_to_root,
+    resolve_user_path,
+)
 
 TEXT_DOCUMENT_SUFFIXES = {".md", ".txt", ".py", ".json", ".yaml", ".yml"}
 CONVERTIBLE_DOCUMENT_SUFFIXES = {
