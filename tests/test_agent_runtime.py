@@ -261,6 +261,8 @@ def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkey
     assert captured["tool_context"].cwd == tmp_path
     assert captured["tool_context"].browser_enabled is True
     assert captured["tool_context"].browser_headless is True
+    assert captured["tool_context"].mcp_enabled is False
+    assert captured["tool_context"].mcp_config_path == "mcp_servers.json"
     assert fake_browser_tool in captured["tools"]
     assert captured["interrupt_on"] == {"custom_risky_tool": True}
     assert cleanup_calls == ["cleanup"]

@@ -19,6 +19,8 @@ def test_doctor_command_reports_ok(tmp_path, monkeypatch):
 
     assert result.exit_code == 0
     assert "easy-claw doctor" in result.stdout
+    assert "mcp_enabled:" in result.stdout
+    assert "mcp_config_path:" in result.stdout
 
 
 def test_chat_dry_run_uses_fake_runtime():
@@ -249,3 +251,17 @@ def test_dev_tools_python_prints_output(tmp_path, monkeypatch):
         log.event_type for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
     ]
     assert "python_run" in events
+
+
+def test_startup_banner_shows_mcp_status(tmp_path, monkeypatch):
+    from easy_claw.cli import _count_mcp_servers
+
+    assert _count_mcp_servers("nonexistent.json") == 0
+
+    valid = tmp_path / "servers.json"
+    valid.write_text('{"srv1": {}, "srv2": {}}')
+    assert _count_mcp_servers(str(valid)) == 2
+
+    empty = tmp_path / "empty.json"
+    empty.write_text("[]")
+    assert _count_mcp_servers(str(empty)) == 0

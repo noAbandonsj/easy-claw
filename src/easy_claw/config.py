@@ -26,6 +26,8 @@ class AppConfig:
     browser_headless: bool = False
     search_backend: str = "auto"
     tavily_api_key: str | None = None
+    mcp_enabled: bool = False
+    mcp_config_path: str = "mcp_servers.json"
     max_model_calls: int | None = DEFAULT_MAX_MODEL_CALLS
     max_tool_calls: int | None = DEFAULT_MAX_TOOL_CALLS
 
@@ -84,6 +86,8 @@ def load_config(
     )
     search_backend = (values.get("EASY_CLAW_SEARCH_BACKEND") or "auto").strip().lower()
     tavily_api_key = values.get("TAVILY_API_KEY") or None
+    mcp_enabled = _read_bool(values.get("EASY_CLAW_MCP_ENABLED"), default=False)
+    mcp_config_path = (values.get("EASY_CLAW_MCP_CONFIG") or "mcp_servers.json").strip()
 
     return AppConfig(
         cwd=current_dir,
@@ -98,6 +102,8 @@ def load_config(
         execution_mode=execution_mode,
         browser_enabled=browser_enabled,
         browser_headless=browser_headless,
+        mcp_enabled=mcp_enabled,
+        mcp_config_path=mcp_config_path,
         search_backend=search_backend,
         tavily_api_key=tavily_api_key,
         max_model_calls=max_model_calls,

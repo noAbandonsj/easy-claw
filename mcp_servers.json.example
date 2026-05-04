@@ -1,0 +1,8 @@
+{
+    "_comment": "MCP server configurations for easy-claw. Copy to mcp_servers.json and edit.",
+    "filesystem": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+        "transport": "stdio"
+    }
+}

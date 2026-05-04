@@ -2,4 +2,4 @@ from easy_claw import __version__
 
 
 def test_package_exposes_version():
-    assert __version__ == "0.1.0"
+    assert __version__ == "0.4.0"

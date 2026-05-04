@@ -171,28 +171,19 @@ def _find_session_by_prefix(repo: SessionRepository, prefix: str) -> SessionReco
 
 
 def _delete_checkpoint_thread(thread_id: str, checkpoint_db_path: Path) -> None:
-    import sqlite3
-    from contextlib import closing
+    """Delete all checkpoints for a thread using langgraph's public API."""
+    from langgraph.checkpoint.sqlite import SqliteSaver
 
     if not checkpoint_db_path.exists():
         return
     try:
-        with closing(sqlite3.connect(str(checkpoint_db_path))) as conn:
-            conn.execute(
-                "DELETE FROM checkpoint_blobs WHERE thread_id = ?",
-                (thread_id,),
-            )
-            conn.execute(
-                "DELETE FROM checkpoint_writes WHERE thread_id = ?",
-                (thread_id,),
-            )
-            conn.execute(
-                "DELETE FROM checkpoints WHERE thread_id = ?",
-                (thread_id,),
-            )
-            conn.commit()
-    except sqlite3.OperationalError:
-        pass
+        with SqliteSaver.from_conn_string(str(checkpoint_db_path)) as saver:
+            saver.delete_thread(thread_id)
+    except Exception:
+        console.print(
+            f"[yellow]Warning:[/] deleted session but failed to clean up "
+            f"checkpoints in {checkpoint_db_path}"
+        )
 
 
 @skills_app.command("list")
@@ -314,6 +305,7 @@ def _run_interactive_chat(
             audit_repo=audit_repo,
             session_id=session_id,
             supports_clear=False,
+            session_config=None,
         )
         return
 
@@ -322,6 +314,7 @@ def _run_interactive_chat(
     skill_sources = discover_skill_sources(config.cwd / "skills", config.default_workspace)
     memories = [item.content for item in MemoryRepository(config.product_db_path).list_memory()]
     runtime = DeepAgentsRuntime()
+    conversation: list[tuple[str, str]] = []
 
     _render_startup_banner(config)
 
@@ -354,6 +347,8 @@ def _run_interactive_chat(
                 audit_repo=audit_repo,
                 session_id=thread_id,
                 supports_clear=True,
+                session_config=config,
+                conversation=conversation,
             )
         else:
             with open_session(base_request) as agent_session:
@@ -364,6 +359,8 @@ def _run_interactive_chat(
                     audit_repo=audit_repo,
                     session_id=thread_id,
                     supports_clear=True,
+                    session_config=config,
+                    conversation=conversation,
                 )
 
         if not restart:
@@ -374,10 +371,11 @@ def _run_interactive_chat(
                 console.print(f"[yellow]Not a directory: {new_path}[/]")
                 continue
             config = dataclasses.replace(config, default_workspace=new_path)
-            # Keep thread_id — preserve conversation across workspace switches
+            # Keep thread_id and conversation across workspace switches
             console.print(f"[dim]Workspace changed to {new_path}[/]")
         else:
             thread_id = None  # /clear: create a new session next iteration
+            conversation.clear()
             console.print("[dim]Conversation cleared. Starting fresh.[/]")
 
 
@@ -388,6 +386,8 @@ def _run_interactive_loop(
     session_id: str,
     stream_turn: Callable[[str], Iterable[StreamEvent]] | None = None,
     supports_clear: bool = False,
+    session_config: "AppConfig | None" = None,  # noqa: F821
+    conversation: list[tuple[str, str]] | None = None,
 ) -> str | None:
     """Run the REPL loop.
 
@@ -396,6 +396,9 @@ def _run_interactive_loop(
         \"clear\" if the caller should restart with a fresh session.
         \"/workspace <path>\" if the caller should switch workspace.
     """
+    if conversation is None:
+        conversation = []
+
     while True:
         try:
             console.print("  [bold cyan]easy-claw>[/] ", end="")
@@ -421,14 +424,29 @@ def _run_interactive_loop(
                 console.print("[yellow]Usage: /workspace <path>[/]")
                 continue
             return f"/workspace {parts[1].strip()}"
+        if prompt.lower() == "/status":
+            _print_session_status(session_id, session_config, conversation)
+            continue
+        if prompt.lower().startswith("/save"):
+            parts = prompt.split(maxsplit=1)
+            if len(parts) < 2 or not parts[1].strip():
+                console.print("[yellow]Usage: /save <path>[/]")
+                continue
+            save_path = Path(parts[1].strip()).expanduser().resolve()
+            _write_conversation_markdown(conversation, save_path, session_id, session_config)
+            console.print(f"[dim]Conversation saved to {save_path}[/]")
+            continue
 
         if stream_turn is not None:
-            _render_streaming_turn(stream_turn(prompt))
+            response = _render_streaming_turn(stream_turn(prompt))
         else:
             with console.status("[dim]Thinking...[/]"):
                 result = run_turn(prompt)
-            console.print(result.content)
+            response = result.content
+            console.print(response)
             console.print(Rule(style="dim"))
+
+        conversation.append((prompt, response))
 
         if audit_repo is not None:
             audit_repo.record(
@@ -516,7 +534,10 @@ def tool_python(code: str) -> None:
         raise typer.Exit(code=result.exit_code)
 
 
-def _render_streaming_turn(events: Iterable[StreamEvent]) -> None:
+def _render_streaming_turn(events: Iterable[StreamEvent]) -> tuple[str, dict[str, int] | None]:
+    """Render a streaming turn. Returns (response_text, usage)."""
+    tokens: list[str] = []
+    usage: dict[str, int] | None = None
     printed_token = False
     spinner = console.status("[dim]Thinking...[/]")
     spinner.start()
@@ -527,6 +548,7 @@ def _render_streaming_turn(events: Iterable[StreamEvent]) -> None:
             spinner_running = False
         if event.type == "token":
             console.print(event.content, end="")
+            tokens.append(event.content)
             printed_token = True
         elif event.type == "tool_call_start":
             _print_stream_separator(printed_token)
@@ -560,11 +582,66 @@ def _render_streaming_turn(events: Iterable[StreamEvent]) -> None:
                 console.print()
             printed_token = False
     console.print(Rule(style="dim"))
+    return "".join(tokens)
 
 
 def _print_stream_separator(printed_token: bool) -> None:
     if printed_token:
         console.print()
+
+
+def _write_conversation_markdown(
+    conversation: list[tuple[str, str]],
+    path: Path,
+    session_id: str,
+    config: "AppConfig | None",  # noqa: F821
+) -> None:
+    from datetime import datetime
+
+    lines: list[str] = []
+    lines.append(f"# easy-claw Conversation")
+    lines.append(f"")
+    lines.append(f"- **Session:** `{session_id}`")
+    lines.append(f"- **Model:** {config.model if config else 'N/A'}")
+    lines.append(f"- **Workspace:** {config.default_workspace if config else 'N/A'}")
+    lines.append(f"- **Exported:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(f"")
+    lines.append(f"---")
+    lines.append(f"")
+
+    for i, (user_msg, assistant_msg) in enumerate(conversation, 1):
+        lines.append(f"### Turn {i}")
+        lines.append(f"")
+        lines.append(f"**You:**")
+        lines.append(f"")
+        lines.append(f"{user_msg}")
+        lines.append(f"")
+        lines.append(f"**easy-claw:**")
+        lines.append(f"")
+        lines.append(f"{assistant_msg}")
+        lines.append(f"")
+        lines.append(f"---")
+        lines.append(f"")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _print_session_status(
+    session_id: str,
+    config: "AppConfig | None",  # noqa: F821
+    conversation: list[tuple[str, str]],
+) -> None:
+    cfg = config
+    table = Table(title=f"Session {session_id[:8]}", title_style="bold")
+    table.add_column("Property", style="bold cyan")
+    table.add_column("Value")
+    table.add_row("Model", cfg.model if cfg else "N/A")
+    table.add_row("Workspace", str(cfg.default_workspace) if cfg else "N/A")
+    table.add_row("Approval mode", cfg.approval_mode if cfg else "N/A")
+    table.add_row("Turns", str(len(conversation)))
+    table.add_row("Checkpoints", str(cfg.checkpoint_db_path) if cfg else "N/A")
+    console.print(table)
 
 
 def _format_stream_value(value: object) -> str:
@@ -621,9 +698,4 @@ def _render_startup_banner(config: "AppConfig") -> None:  # noqa: F821
         border_style="cyan",
     )
     console.print(banner)
-    console.print("[dim]:q/exit/quit to leave, /clear to reset, /workspace <path> to switch dir, empty to skip.[/]")
-    console.print()
-
-
-def main() -> None:
-    app()
+    console.print("[dim]:q/exit/quit to leave, /clear to reset, /workspace <path> to switch dir, empty to skip.

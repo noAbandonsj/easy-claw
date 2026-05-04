@@ -26,6 +26,7 @@ class AgentRequest:
 class AgentResult:
     content: str
     thread_id: str
+    usage: dict[str, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,7 @@ class StreamEvent:
     tool_args: object | None = None
     tool_result: object | None = None
     thread_id: str | None = None
+    usage: dict[str, int] | None = None
 
 
 class ApprovalReviewer(Protocol):
@@ -123,6 +125,8 @@ class DeepAgentsRuntime:
                 cwd=workspace_path,
                 browser_enabled=cfg.browser_enabled,
                 browser_headless=cfg.browser_headless,
+                mcp_enabled=cfg.mcp_enabled,
+                mcp_config_path=cfg.mcp_config_path,
             )
         )
         interrupt_on = _build_interrupt_on(cfg.approval_mode, tool_bundle.interrupt_on)
@@ -187,9 +191,11 @@ class DeepAgentSession:
             config={"configurable": {"thread_id": self._thread_id}},
             reviewer=self._reviewer,
         )
+        content, usage = _extract_last_message_info(result)
         return AgentResult(
-            content=_extract_last_message_content(result),
+            content=content,
             thread_id=self._thread_id,
+            usage=usage,
         )
 
     def stream(self, prompt: str) -> Iterable[StreamEvent]:
@@ -240,19 +246,29 @@ def _build_system_prompt(memories: Sequence[str]) -> str:
     return "\n\n".join(sections)
 
 
-def _extract_last_message_content(result: object) -> str:
+def _extract_last_message_info(result: object) -> tuple[str, dict[str, int] | None]:
+    """Return (content, usage) from agent invoke result."""
     if not isinstance(result, dict):
-        return str(result)
+        return str(result), None
 
     messages = result.get("messages")
     if not messages:
-        return str(result)
+        return str(result), None
 
     last_message = messages[-1]
     content = getattr(last_message, "content", None)
     if content is None and isinstance(last_message, dict):
         content = last_message.get("content")
-    return str(content or "")
+
+    usage = None
+    usage_meta = getattr(last_message, "usage_metadata", None)
+    if isinstance(usage_meta, dict):
+        usage = {
+            "input": usage_meta.get("input_tokens", 0),
+            "output": usage_meta.get("output_tokens", 0),
+            "total": usage_meta.get("total_tokens", 0),
+        }
+    return str(content or ""), usage
 
 
 def _invoke_with_approval(
@@ -282,6 +298,7 @@ def _stream_with_approval(
     from langgraph.types import Command
 
     content = ""
+    usage: dict[str, int] | None = None
     next_input = input_value
 
     while True:
@@ -295,6 +312,15 @@ def _stream_with_approval(
                 interrupted = True
                 break
 
+            msg = _message_from_stream_item(stream_item)
+            msg_usage = getattr(msg, "usage_metadata", None)
+            if isinstance(msg_usage, dict):
+                usage = {
+                    "input": msg_usage.get("input_tokens", 0),
+                    "output": msg_usage.get("output_tokens", 0),
+                    "total": msg_usage.get("total_tokens", 0),
+                }
+
             for event in _events_from_stream_item(stream_item, thread_id=thread_id):
                 if event.type == "token":
                     content += event.content
@@ -303,7 +329,7 @@ def _stream_with_approval(
         if not interrupted:
             break
 
-    yield StreamEvent(type="done", content=content, thread_id=thread_id)
+    yield StreamEvent(type="done", content=content, thread_id=thread_id, usage=usage)
 
 
 def _events_from_stream_item(stream_item: object, *, thread_id: str) -> list[StreamEvent]:
