@@ -24,7 +24,7 @@ from easy_claw.agent.runtime import (
 from easy_claw.config import load_config
 from easy_claw.skills import discover_skill_sources, discover_skills
 from easy_claw.storage.db import initialize_product_db
-from easy_claw.storage.repositories import AuditRepository, MemoryRepository, SessionRepository
+from easy_claw.storage.repositories import AuditRepository, MemoryRepository, SessionRecord, SessionRepository
 from easy_claw.tools.base import ToolExecutionError
 from easy_claw.tools.commands import run_command
 from easy_claw.tools.python_runner import run_python_code
@@ -38,6 +38,8 @@ dev_app = typer.Typer(help="Developer and debugging commands")
 skills_app = typer.Typer(help="Manage Markdown skills")
 memory_app = typer.Typer(help="Manage explicit product memory")
 tools_app = typer.Typer(help="Run local power tools")
+sessions_app = typer.Typer(help="Manage chat sessions")
+app.add_typer(sessions_app, name="sessions", rich_help_panel="Management")
 app.add_typer(dev_app, name="dev", rich_help_panel="Development")
 dev_app.add_typer(skills_app, name="skills")
 dev_app.add_typer(memory_app, name="memory")
@@ -92,6 +94,105 @@ def init_db() -> None:
     config = load_config()
     initialize_product_db(config.product_db_path)
     console.print(f"initialized {config.product_db_path}")
+
+
+@sessions_app.command("list")
+def list_sessions() -> None:
+    """List past chat sessions."""
+    config = load_config()
+    initialize_product_db(config.product_db_path)
+    repo = SessionRepository(config.product_db_path)
+    sessions = repo.list_sessions()
+    if not sessions:
+        console.print("[dim]No sessions found.[/]")
+        return
+    table = Table("ID", "Title", "Model", "Updated")
+    for s in sessions:
+        table.add_row(s.id[:8], s.title[:60], s.model or "-", s.updated_at[:19])
+    console.print(table)
+
+
+@sessions_app.command("resume")
+def resume_session(
+    session_id: Annotated[str, typer.Argument(help="Session ID (first 8 chars are enough)")],
+    model: Annotated[str | None, typer.Option("--model", help="Override the model.")] = None,
+) -> None:
+    """Resume an existing chat session."""
+    config = load_config()
+    if model is not None:
+        config = dataclasses.replace(config, model=model)
+    initialize_product_db(config.product_db_path)
+    repo = SessionRepository(config.product_db_path)
+
+    # Match by prefix
+    matched = _find_session_by_prefix(repo, session_id)
+    if matched is None:
+        console.print(f"No session found matching [bold]{session_id}[/].")
+        raise typer.Exit(code=1)
+
+    _run_interactive_chat(dry_run=False, config=config, resume_thread_id=matched.id)
+
+
+@sessions_app.command("delete")
+def delete_session(
+    session_id: Annotated[str, typer.Argument(help="Session ID (first 8 chars are enough)")],
+    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation."),
+) -> None:
+    """Delete a chat session and its checkpoints."""
+    config = load_config()
+    initialize_product_db(config.product_db_path)
+    repo = SessionRepository(config.product_db_path)
+
+    matched = _find_session_by_prefix(repo, session_id)
+    if matched is None:
+        console.print(f"No session found matching [bold]{session_id}[/].")
+        raise typer.Exit(code=1)
+
+    if not force:
+        from typer import confirm
+
+        if not confirm(
+            f"Delete session [bold]{matched.title}[/] ({matched.id[:8]})?"
+        ):
+            raise typer.Exit()
+
+    repo.delete_session(matched.id)
+    _delete_checkpoint_thread(matched.id, config.checkpoint_db_path)
+    console.print(f"Deleted session [bold]{matched.title}[/].")
+
+
+def _find_session_by_prefix(repo: SessionRepository, prefix: str) -> SessionRecord | None:
+    sessions = repo.list_sessions()
+    matches = [s for s in sessions if s.id.startswith(prefix)]
+    if len(matches) == 1:
+        return matches[0]
+    # Fall back to exact match
+    return repo.get_session(prefix)
+
+
+def _delete_checkpoint_thread(thread_id: str, checkpoint_db_path: Path) -> None:
+    import sqlite3
+    from contextlib import closing
+
+    if not checkpoint_db_path.exists():
+        return
+    try:
+        with closing(sqlite3.connect(str(checkpoint_db_path))) as conn:
+            conn.execute(
+                "DELETE FROM checkpoint_blobs WHERE thread_id = ?",
+                (thread_id,),
+            )
+            conn.execute(
+                "DELETE FROM checkpoint_writes WHERE thread_id = ?",
+                (thread_id,),
+            )
+            conn.execute(
+                "DELETE FROM checkpoints WHERE thread_id = ?",
+                (thread_id,),
+            )
+            conn.commit()
+    except sqlite3.OperationalError:
+        pass
 
 
 @skills_app.command("list")
@@ -186,7 +287,12 @@ def chat(
     console.print(result.content)
 
 
-def _run_interactive_chat(*, dry_run: bool, config: "AppConfig") -> None:  # noqa: F821
+def _run_interactive_chat(
+    *,
+    dry_run: bool,
+    config: "AppConfig",  # noqa: F821
+    resume_thread_id: str | None = None,
+) -> None:
     if not dry_run and config.model is None:
         console.print("Set EASY_CLAW_MODEL before running chat without --dry-run.")
         raise typer.Exit(code=1)
@@ -219,7 +325,8 @@ def _run_interactive_chat(*, dry_run: bool, config: "AppConfig") -> None:  # noq
 
     _render_startup_banner(config)
 
-    thread_id: str | None = None
+    # First iteration: use resume_thread_id if given, otherwise create new session
+    thread_id: str | None = resume_thread_id
     open_session = getattr(runtime, "open_session", None)
 
     while True:
@@ -261,7 +368,7 @@ def _run_interactive_chat(*, dry_run: bool, config: "AppConfig") -> None:  # noq
 
         if not restart:
             break
-        thread_id = None
+        thread_id = None  # /clear: create a new session next iteration
         console.print("[dim]Conversation cleared. Starting fresh.[/]")
 
 

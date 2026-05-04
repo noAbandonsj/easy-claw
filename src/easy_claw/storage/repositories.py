@@ -90,6 +90,14 @@ class SessionRepository:
             ).fetchall()
         return [SessionRecord(**dict(row)) for row in rows]
 
+    def delete_session(self, session_id: str) -> bool:
+        with connect_product_db(self._db_path) as connection:
+            cursor = connection.execute(
+                "DELETE FROM sessions WHERE id = ?",
+                (session_id,),
+            )
+        return cursor.rowcount > 0
+
     def get_session(self, session_id: str) -> SessionRecord | None:
         with connect_product_db(self._db_path) as connection:
             row = connection.execute(
