@@ -315,6 +315,7 @@ def _run_interactive_chat(
     memories = [item.content for item in MemoryRepository(config.product_db_path).list_memory()]
     runtime = DeepAgentsRuntime()
     conversation: list[tuple[str, str]] = []
+    token_usage: dict[str, int] = {}
 
     _render_startup_banner(config)
 
@@ -349,6 +350,7 @@ def _run_interactive_chat(
                 supports_clear=True,
                 session_config=config,
                 conversation=conversation,
+                token_usage=token_usage,
             )
         else:
             with open_session(base_request) as agent_session:
@@ -361,6 +363,7 @@ def _run_interactive_chat(
                     supports_clear=True,
                     session_config=config,
                     conversation=conversation,
+                    token_usage=token_usage,
                 )
 
         if not restart:
@@ -376,6 +379,7 @@ def _run_interactive_chat(
         else:
             thread_id = None  # /clear: create a new session next iteration
             conversation.clear()
+            token_usage.clear()
             console.print("[dim]Conversation cleared. Starting fresh.[/]")
 
 
@@ -388,6 +392,7 @@ def _run_interactive_loop(
     supports_clear: bool = False,
     session_config: "AppConfig | None" = None,  # noqa: F821
     conversation: list[tuple[str, str]] | None = None,
+    token_usage: dict[str, int] | None = None,
 ) -> str | None:
     """Run the REPL loop.
 
@@ -398,6 +403,8 @@ def _run_interactive_loop(
     """
     if conversation is None:
         conversation = []
+    if token_usage is None:
+        token_usage = {}
 
     while True:
         try:
@@ -425,7 +432,7 @@ def _run_interactive_loop(
                 continue
             return f"/workspace {parts[1].strip()}"
         if prompt.lower() == "/status":
-            _print_session_status(session_id, session_config, conversation)
+            _print_session_status(session_id, session_config, conversation, token_usage)
             continue
         if prompt.lower().startswith("/save"):
             parts = prompt.split(maxsplit=1)
@@ -438,15 +445,19 @@ def _run_interactive_loop(
             continue
 
         if stream_turn is not None:
-            response = _render_streaming_turn(stream_turn(prompt))
+            response, usage = _render_streaming_turn(stream_turn(prompt))
         else:
             with console.status("[dim]Thinking...[/]"):
                 result = run_turn(prompt)
             response = result.content
+            usage = result.usage
             console.print(response)
             console.print(Rule(style="dim"))
 
         conversation.append((prompt, response))
+        if usage:
+            for key in ("input", "output", "total"):
+                token_usage[key] = token_usage.get(key, 0) + usage.get(key, 0)
 
         if audit_repo is not None:
             audit_repo.record(
@@ -581,8 +592,9 @@ def _render_streaming_turn(events: Iterable[StreamEvent]) -> tuple[str, dict[str
             if printed_token:
                 console.print()
             printed_token = False
+            usage = event.usage
     console.print(Rule(style="dim"))
-    return "".join(tokens)
+    return "".join(tokens), usage
 
 
 def _print_stream_separator(printed_token: bool) -> None:
@@ -631,6 +643,7 @@ def _print_session_status(
     session_id: str,
     config: "AppConfig | None",  # noqa: F821
     conversation: list[tuple[str, str]],
+    token_usage: dict[str, int] | None = None,
 ) -> None:
     cfg = config
     table = Table(title=f"Session {session_id[:8]}", title_style="bold")
@@ -640,6 +653,10 @@ def _print_session_status(
     table.add_row("Workspace", str(cfg.default_workspace) if cfg else "N/A")
     table.add_row("Approval mode", cfg.approval_mode if cfg else "N/A")
     table.add_row("Turns", str(len(conversation)))
+    if token_usage:
+        table.add_row("Tokens in", f"{token_usage.get('input', 0):,}")
+        table.add_row("Tokens out", f"{token_usage.get('output', 0):,}")
+        table.add_row("Tokens total", f"{token_usage.get('total', 0):,}")
     table.add_row("Checkpoints", str(cfg.checkpoint_db_path) if cfg else "N/A")
     console.print(table)
 
@@ -698,4 +715,9 @@ def _render_startup_banner(config: "AppConfig") -> None:  # noqa: F821
         border_style="cyan",
     )
     console.print(banner)
-    console.print("[dim]:q/exit/quit to leave, /clear to reset, /workspace <path> to switch dir, empty to skip.
+    console.print("[dim]:q/exit/quit to leave, /clear to reset, /workspace <path> to switch dir, empty to skip.[/]")
+    console.print()
+
+
+def main() -> None:
+    app()
