@@ -434,6 +434,9 @@ def _run_interactive_loop(
         if prompt.lower() == "/status":
             _print_session_status(session_id, session_config, conversation, token_usage)
             continue
+        if prompt.lower() == "/help":
+            _print_help()
+            continue
         if prompt.lower().startswith("/save"):
             parts = prompt.split(maxsplit=1)
             if len(parts) < 2 or not parts[1].strip():
@@ -639,6 +642,20 @@ def _write_conversation_markdown(
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def _print_help() -> None:
+    """Print available slash commands in the interactive REPL."""
+    table = Table(title="Available Commands", title_style="bold")
+    table.add_column("Command", style="bold cyan")
+    table.add_column("Description")
+    table.add_row("/help", "Show this help message")
+    table.add_row("/clear", "Clear conversation history and start a new session")
+    table.add_row("/workspace <path>", "Switch the working directory")
+    table.add_row("/save <path>", "Save the conversation to a Markdown file")
+    table.add_row("/status", "Show current session details and token usage")
+    table.add_row("exit, quit, :q", "Exit the assistant")
+    console.print(table)
+
+
 def _print_session_status(
     session_id: str,
     config: "AppConfig | None",  # noqa: F821
@@ -715,7 +732,7 @@ def _render_startup_banner(config: "AppConfig") -> None:  # noqa: F821
         border_style="cyan",
     )
     console.print(banner)
-    console.print("[dim]:q/exit/quit to leave, /clear to reset, /workspace <path> to switch dir, empty to skip.[/]")
+    console.print("[dim]Type /help to see all commands. :q/exit/quit to leave, empty to skip.[/]")
     console.print()
 
 
