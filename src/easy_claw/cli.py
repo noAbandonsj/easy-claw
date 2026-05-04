@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 from collections.abc import Callable, Iterable
 from pathlib import Path
@@ -11,8 +12,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
-from rich.text import Text
 
+from easy_claw import __version__ as _easy_claw_version
 from easy_claw.agent.runtime import (
     AgentRequest,
     AgentResult,
@@ -41,6 +42,25 @@ app.add_typer(dev_app, name="dev", rich_help_panel="Development")
 dev_app.add_typer(skills_app, name="skills")
 dev_app.add_typer(memory_app, name="memory")
 dev_app.add_typer(tools_app, name="tools")
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        console.print(f"easy-claw v{_easy_claw_version}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _main_callback(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show version and exit.",
+    ),
+) -> None:
+    pass
 
 
 @app.command(rich_help_panel="Management")
@@ -109,11 +129,15 @@ def chat(
     prompt: Annotated[str | None, typer.Argument()] = None,
     dry_run: bool = typer.Option(False, "--dry-run"),
     interactive: bool = typer.Option(False, "--interactive", "-i"),
+    model: Annotated[str | None, typer.Option("--model", help="Override the model (e.g. deepseek-chat).")] = None,
 ) -> None:
     """Start the interactive AI assistant (run without args for interactive mode)."""
     config = load_config()
+    if model is not None:
+        config = dataclasses.replace(config, model=model)
+
     if interactive:
-        _run_interactive_chat(dry_run=dry_run)
+        _run_interactive_chat(dry_run=dry_run, config=config)
         return
 
     if prompt is None or prompt.strip() == "":
@@ -125,8 +149,7 @@ def chat(
             AgentRequest(
                 prompt=prompt,
                 thread_id="dry-run",
-                workspace_path=config.default_workspace,
-                model=None,
+                config=None,
             )
         )
         console.print(result.content)
@@ -149,19 +172,9 @@ def chat(
         AgentRequest(
             prompt=prompt,
             thread_id=session.id,
-            workspace_path=config.default_workspace,
-            model=config.model,
-            base_url=config.base_url,
-            api_key=config.api_key,
+            config=config,
             skill_sources=skill_sources,
             memories=memories,
-            checkpoint_db_path=config.checkpoint_db_path,
-            approval_mode=config.approval_mode,
-            execution_mode=config.execution_mode,
-            browser_enabled=config.browser_enabled,
-            browser_headless=config.browser_headless,
-            max_model_calls=config.max_model_calls,
-            max_tool_calls=config.max_tool_calls,
         )
     )
     audit_repo.record(
@@ -171,8 +184,7 @@ def chat(
     console.print(result.content)
 
 
-def _run_interactive_chat(*, dry_run: bool) -> None:
-    config = load_config()
+def _run_interactive_chat(*, dry_run: bool, config: "AppConfig") -> None:  # noqa: F821
     if not dry_run and config.model is None:
         console.print("Set EASY_CLAW_MODEL before running chat without --dry-run.")
         raise typer.Exit(code=1)
@@ -200,19 +212,9 @@ def _run_interactive_chat(*, dry_run: bool) -> None:
     base_request = AgentRequest(
         prompt="",
         thread_id=session_id,
-        workspace_path=config.default_workspace,
-        model=config.model if not dry_run else None,
-        base_url=config.base_url,
-        api_key=config.api_key if not dry_run else None,
+        config=config if not dry_run else None,
         skill_sources=skill_sources,
         memories=memories,
-        checkpoint_db_path=config.checkpoint_db_path if not dry_run else None,
-        approval_mode=config.approval_mode,
-        execution_mode=config.execution_mode,
-        browser_enabled=config.browser_enabled,
-        browser_headless=config.browser_headless,
-        max_model_calls=config.max_model_calls,
-        max_tool_calls=config.max_tool_calls,
     )
     if dry_run:
         _run_interactive_loop(
@@ -220,8 +222,7 @@ def _run_interactive_chat(*, dry_run: bool) -> None:
                 AgentRequest(
                     prompt=prompt,
                     thread_id=session_id,
-                    workspace_path=config.default_workspace,
-                    model=None,
+                    config=None,
                 )
             ),
             audit_repo=audit_repo,
@@ -283,23 +284,7 @@ def _run_interactive_loop(
 
 
 def _agent_request_for_prompt(request: AgentRequest, prompt: str) -> AgentRequest:
-    return AgentRequest(
-        prompt=prompt,
-        thread_id=request.thread_id,
-        workspace_path=request.workspace_path,
-        model=request.model,
-        base_url=request.base_url,
-        api_key=request.api_key,
-        skill_sources=request.skill_sources,
-        memories=request.memories,
-        checkpoint_db_path=request.checkpoint_db_path,
-        approval_mode=request.approval_mode,
-        execution_mode=request.execution_mode,
-        browser_enabled=request.browser_enabled,
-        browser_headless=request.browser_headless,
-        max_model_calls=request.max_model_calls,
-        max_tool_calls=request.max_tool_calls,
-    )
+    return dataclasses.replace(request, prompt=prompt)
 
 
 @tools_app.command("search")
@@ -459,7 +444,7 @@ def _render_startup_banner(config: "AppConfig") -> None:  # noqa: F821
 
     banner = Panel(
         grid,
-        title="[bold]easy-claw v0.3[/]",
+        title=f"[bold]easy-claw v{_easy_claw_version}[/]",
         title_align="left",
         border_style="cyan",
     )

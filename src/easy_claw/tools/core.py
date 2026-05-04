@@ -5,7 +5,7 @@ from pathlib import Path
 from langchain_core.tools import tool
 
 from easy_claw.agent.types import ToolBundle
-from easy_claw.tools.commands import run_command as _run_command
+from easy_claw.tools.commands import CommandResult, run_command as _run_command
 from easy_claw.tools.documents import read_workspace_document as _read_workspace_document
 from easy_claw.tools.python_runner import run_python_code as _run_python_code
 from easy_claw.tools.search import search_web as _search_web
@@ -14,6 +14,21 @@ CORE_INTERRUPT_ON = {
     "run_command": True,
     "run_python": True,
 }
+
+
+def _format_command_result(result: CommandResult, *, label: str) -> str:
+    parts: list[str] = []
+    if result.timed_out:
+        parts.append(f"[WARNING] {label} timed out after 60 seconds.")
+    if result.stdout:
+        parts.append(result.stdout)
+    if result.stderr:
+        parts.append(f"[stderr]\n{result.stderr}")
+    if result.truncated:
+        parts.append("[WARNING] Output was truncated (exceeded 20000 characters).")
+    if result.exit_code != 0 and not result.timed_out:
+        parts.append(f"[exit code: {result.exit_code}]")
+    return "\n".join(parts) if parts else "(no output)"
 
 
 def build_core_tool_bundle(*, workspace_path: Path, cwd: Path) -> ToolBundle:
@@ -51,19 +66,7 @@ def build_core_tools(*, workspace_path: Path, cwd: Path) -> list[object]:
         commands. This is a local fallback runner, not a sandbox. Output is
         captured and truncated at 20000 characters. Timeout is 60 seconds.
         """
-        result = _run_command(command, cwd=cwd)
-        parts: list[str] = []
-        if result.timed_out:
-            parts.append("[WARNING] Command timed out after 60 seconds.")
-        if result.stdout:
-            parts.append(result.stdout)
-        if result.stderr:
-            parts.append(f"[stderr]\n{result.stderr}")
-        if result.truncated:
-            parts.append("[WARNING] Output was truncated (exceeded 20000 characters).")
-        if result.exit_code != 0 and not result.timed_out:
-            parts.append(f"[exit code: {result.exit_code}]")
-        return "\n".join(parts) if parts else "(no output)"
+        return _format_command_result(_run_command(command, cwd=cwd), label="Command")
 
     @tool
     def run_python(code: str) -> str:
@@ -75,19 +78,7 @@ def build_core_tools(*, workspace_path: Path, cwd: Path) -> list[object]:
         captured and truncated at
         20000 characters. Timeout is 60 seconds.
         """
-        result = _run_python_code(code, cwd=cwd)
-        parts: list[str] = []
-        if result.timed_out:
-            parts.append("[WARNING] Python execution timed out after 60 seconds.")
-        if result.stdout:
-            parts.append(result.stdout)
-        if result.stderr:
-            parts.append(f"[stderr]\n{result.stderr}")
-        if result.truncated:
-            parts.append("[WARNING] Output was truncated (exceeded 20000 characters).")
-        if result.exit_code != 0 and not result.timed_out:
-            parts.append(f"[exit code: {result.exit_code}]")
-        return "\n".join(parts) if parts else "(no output)"
+        return _format_command_result(_run_python_code(code, cwd=cwd), label="Python execution")
 
     @tool
     def read_document(path: str) -> str:

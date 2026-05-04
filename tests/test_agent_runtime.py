@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 from langchain.agents.middleware import ModelCallLimitMiddleware, ToolCallLimitMiddleware
 from langgraph.types import Command
@@ -15,6 +16,23 @@ from easy_claw.agent.runtime import (
     _events_from_stream_item,
     _invoke_with_approval,
 )
+from easy_claw.config import AppConfig
+
+
+def _test_config(*, tmp_path: Path, **kwargs: object) -> AppConfig:
+    """Build a minimal AppConfig for tests."""
+    defaults = {
+        "cwd": tmp_path,
+        "data_dir": tmp_path / "data",
+        "product_db_path": tmp_path / "easy-claw.db",
+        "checkpoint_db_path": tmp_path / "checkpoints.sqlite",
+        "default_workspace": tmp_path,
+        "model": "deepseek-v4-pro",
+        "base_url": "https://api.deepseek.com",
+        "api_key": "test-key",
+    }
+    defaults.update(kwargs)
+    return AppConfig(**defaults)
 
 
 def test_fake_agent_runtime_returns_deterministic_result(tmp_path):
@@ -24,12 +42,7 @@ def test_fake_agent_runtime_returns_deterministic_result(tmp_path):
         AgentRequest(
             prompt="hello",
             thread_id="thread-1",
-            workspace_path=tmp_path,
-            model=None,
-            base_url="https://api.deepseek.com",
-            api_key=None,
-            skill_sources=[],
-            memories=[],
+            config=None,
         )
     )
 
@@ -152,17 +165,17 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
     monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
     monkeypatch.setattr("deepagents.backends.LocalShellBackend", FakeBackend)
 
+    config = _test_config(
+        tmp_path=tmp_path,
+        checkpoint_db_path=tmp_path / "checkpoints.sqlite",
+    )
     result = DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True)).run(
         AgentRequest(
             prompt="hello",
             thread_id="thread-1",
-            workspace_path=tmp_path,
-            model="deepseek-v4-pro",
-            base_url="https://api.deepseek.com",
-            api_key="test-key",
+            config=config,
             skill_sources=["/skills/core/"],
             memories=["Use Chinese."],
-            checkpoint_db_path=tmp_path / "checkpoints.sqlite",
         )
     )
 
@@ -227,18 +240,18 @@ def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkey
         fake_build_easy_claw_tools,
     )
 
+    config = _test_config(
+        tmp_path=tmp_path,
+        checkpoint_db_path=tmp_path / "checkpoints.sqlite",
+        approval_mode="balanced",
+        browser_enabled=True,
+        browser_headless=True,
+    )
     with DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True)).open_session(
         AgentRequest(
             prompt="",
             thread_id="thread-1",
-            workspace_path=tmp_path,
-            model="deepseek-v4-pro",
-            base_url="https://api.deepseek.com",
-            api_key="test-key",
-            checkpoint_db_path=tmp_path / "checkpoints.sqlite",
-            approval_mode="balanced",
-            browser_enabled=True,
-            browser_headless=True,
+            config=config,
         )
     ) as session:
         result = session.run("hello")
@@ -280,16 +293,16 @@ def test_deepagents_session_reuses_agent_between_turns(tmp_path, monkeypatch):
     monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
     monkeypatch.setattr("deepagents.backends.LocalShellBackend", FakeBackend)
 
+    config = _test_config(
+        tmp_path=tmp_path,
+        checkpoint_db_path=tmp_path / "checkpoints.sqlite",
+    )
     runtime = DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True))
     with runtime.open_session(
         AgentRequest(
             prompt="",
             thread_id="thread-1",
-            workspace_path=tmp_path,
-            model="deepseek-v4-pro",
-            base_url="https://api.deepseek.com",
-            api_key="test-key",
-            checkpoint_db_path=tmp_path / "checkpoints.sqlite",
+            config=config,
         )
     ) as session:
         first = session.run("first")

@@ -92,7 +92,7 @@ uv run easy-claw doctor
 | 搜索资料 | "搜索 DeepSeek API 最新的 function calling 文档" |
 | 浏览网页 | "打开 Deep Agents 文档，找到 sandbox backend 的 execute 说明" |
 | 运行测试 | "运行 pytest 并告诉我哪些测试失败了" |
-| 生成报告 | "把刚才的分析结果保存到 analysis.md" |
+| 保存文件 | "把刚才的分析结果保存到 analysis.md" |
 | 代码片段 | "用 Python 读取 data/config.json 并打印所有 key" |
 | 命令执行 | "列出当前目录下所有 Python 文件" |
 

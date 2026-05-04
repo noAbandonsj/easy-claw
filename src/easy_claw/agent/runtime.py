@@ -9,26 +9,17 @@ from typing import Any, Protocol
 from easy_claw.agent.middleware import build_agent_middleware
 from easy_claw.agent.toolset import build_easy_claw_tools
 from easy_claw.agent.types import CleanupCallback, ToolContext
-from easy_claw.defaults import DEFAULT_MAX_MODEL_CALLS, DEFAULT_MAX_TOOL_CALLS
+from easy_claw.config import AppConfig
 
 
 @dataclass(frozen=True)
 class AgentRequest:
     prompt: str
     thread_id: str
-    workspace_path: Path
-    model: str | None
-    base_url: str = "https://api.deepseek.com"
-    api_key: str | None = None
+    config: AppConfig | None
+    workspace_path: Path | None = None
     skill_sources: Sequence[str] = field(default_factory=tuple)
     memories: Sequence[str] = field(default_factory=tuple)
-    checkpoint_db_path: Path | None = None
-    approval_mode: str = "permissive"
-    execution_mode: str = "local"
-    browser_enabled: bool = False
-    browser_headless: bool = False
-    max_model_calls: int | None = DEFAULT_MAX_MODEL_CALLS
-    max_tool_calls: int | None = DEFAULT_MAX_TOOL_CALLS
 
 
 @dataclass(frozen=True)
@@ -108,15 +99,19 @@ class DeepAgentsRuntime:
             return session.run(request.prompt)
 
     def open_session(self, request: AgentRequest) -> DeepAgentSession:
-        if request.model is None:
+        if request.config is None:
+            raise RuntimeError("config is required for DeepAgentsRuntime.")
+        cfg = request.config
+        if cfg.model is None:
             raise RuntimeError("Set EASY_CLAW_MODEL before running chat without --dry-run.")
-        if request.api_key is None:
+        if cfg.api_key is None:
             raise RuntimeError("Set EASY_CLAW_API_KEY before running chat without --dry-run.")
-        if request.checkpoint_db_path is None:
+        if cfg.checkpoint_db_path is None:
             raise RuntimeError("checkpoint_db_path is required for DeepAgentsRuntime.")
 
-        request.checkpoint_db_path.parent.mkdir(parents=True, exist_ok=True)
+        cfg.checkpoint_db_path.parent.mkdir(parents=True, exist_ok=True)
         system_prompt = _build_system_prompt(request.memories)
+        workspace_path = request.workspace_path or cfg.default_workspace
 
         from deepagents import create_deep_agent
         from deepagents.backends import LocalShellBackend
@@ -124,26 +119,26 @@ class DeepAgentsRuntime:
 
         tool_bundle = build_easy_claw_tools(
             ToolContext(
-                workspace_path=request.workspace_path,
-                cwd=request.workspace_path,
-                browser_enabled=request.browser_enabled,
-                browser_headless=request.browser_headless,
+                workspace_path=workspace_path,
+                cwd=workspace_path,
+                browser_enabled=cfg.browser_enabled,
+                browser_headless=cfg.browser_headless,
             )
         )
-        interrupt_on = _build_interrupt_on(request.approval_mode, tool_bundle.interrupt_on)
+        interrupt_on = _build_interrupt_on(cfg.approval_mode, tool_bundle.interrupt_on)
 
-        checkpointer_context = SqliteSaver.from_conn_string(str(request.checkpoint_db_path))
+        checkpointer_context = SqliteSaver.from_conn_string(str(cfg.checkpoint_db_path))
         checkpointer = checkpointer_context.__enter__()
         agent = create_deep_agent(
-            model=_build_chat_model(request.model, request.base_url, request.api_key),
+            model=_build_chat_model(cfg.model, cfg.base_url, cfg.api_key),
             tools=tool_bundle.tools,
             system_prompt=system_prompt,
             skills=list(request.skill_sources) or None,
             middleware=build_agent_middleware(
-                max_model_calls=request.max_model_calls,
-                max_tool_calls=request.max_tool_calls,
+                max_model_calls=cfg.max_model_calls,
+                max_tool_calls=cfg.max_tool_calls,
             ),
-            backend=LocalShellBackend(root_dir=request.workspace_path, virtual_mode=True),
+            backend=LocalShellBackend(root_dir=workspace_path, virtual_mode=True),
             checkpointer=checkpointer,
             interrupt_on=interrupt_on,
         )
