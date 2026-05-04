@@ -78,6 +78,8 @@ def doctor() -> None:
     console.print(f"execution_mode: {config.execution_mode}")
     console.print(f"browser_enabled: {config.browser_enabled}")
     console.print(f"browser_headless: {config.browser_headless}")
+    console.print(f"mcp_enabled: {config.mcp_enabled}")
+    console.print(f"mcp_config_path: {config.mcp_config_path}")
     console.print(f"max_model_calls: {config.max_model_calls}")
     console.print(f"max_tool_calls: {config.max_tool_calls}")
     api_key_display = "***" + config.api_key[-4:] if config.api_key else "<not configured>"
@@ -192,31 +194,9 @@ def _run_interactive_chat(*, dry_run: bool, config: "AppConfig") -> None:  # noq
     if dry_run:
         runtime = FakeAgentRuntime()
         session_id = "dry-run"
-        skill_sources = []
-        memories = []
         audit_repo = None
-    else:
-        initialize_product_db(config.product_db_path)
-        audit_repo = AuditRepository(config.product_db_path)
-        session = SessionRepository(config.product_db_path).create_session(
-            workspace_path=str(config.default_workspace),
-            model=config.model,
-            title="Interactive chat",
-        )
-        session_id = session.id
-        skill_sources = discover_skill_sources(config.cwd / "skills", config.default_workspace)
-        memories = [item.content for item in MemoryRepository(config.product_db_path).list_memory()]
-        runtime = DeepAgentsRuntime()
 
-    _render_startup_banner(config)
-    base_request = AgentRequest(
-        prompt="",
-        thread_id=session_id,
-        config=config if not dry_run else None,
-        skill_sources=skill_sources,
-        memories=memories,
-    )
-    if dry_run:
+        _render_startup_banner(config)
         _run_interactive_loop(
             run_turn=lambda prompt: runtime.run(
                 AgentRequest(
@@ -227,26 +207,62 @@ def _run_interactive_chat(*, dry_run: bool, config: "AppConfig") -> None:  # noq
             ),
             audit_repo=audit_repo,
             session_id=session_id,
+            supports_clear=False,
         )
         return
 
+    initialize_product_db(config.product_db_path)
+    audit_repo = AuditRepository(config.product_db_path)
+    skill_sources = discover_skill_sources(config.cwd / "skills", config.default_workspace)
+    memories = [item.content for item in MemoryRepository(config.product_db_path).list_memory()]
+    runtime = DeepAgentsRuntime()
+
+    _render_startup_banner(config)
+
+    thread_id: str | None = None
     open_session = getattr(runtime, "open_session", None)
-    if open_session is None:
-        _run_interactive_loop(
-            run_turn=lambda prompt: runtime.run(_agent_request_for_prompt(base_request, prompt)),
-            audit_repo=audit_repo,
-            session_id=session_id,
-        )
-        return
 
-    with open_session(base_request) as agent_session:
-        stream_turn = getattr(agent_session, "stream", None)
-        _run_interactive_loop(
-            run_turn=agent_session.run,
-            stream_turn=stream_turn,
-            audit_repo=audit_repo,
-            session_id=session_id,
+    while True:
+        if thread_id is None:
+            session = SessionRepository(config.product_db_path).create_session(
+                workspace_path=str(config.default_workspace),
+                model=config.model,
+                title="Interactive chat",
+            )
+            thread_id = session.id
+
+        base_request = AgentRequest(
+            prompt="",
+            thread_id=thread_id,
+            config=config,
+            skill_sources=skill_sources,
+            memories=memories,
         )
+
+        if open_session is None:
+            restart = _run_interactive_loop(
+                run_turn=lambda prompt: runtime.run(
+                    _agent_request_for_prompt(base_request, prompt)
+                ),
+                audit_repo=audit_repo,
+                session_id=thread_id,
+                supports_clear=True,
+            )
+        else:
+            with open_session(base_request) as agent_session:
+                stream_turn = getattr(agent_session, "stream", None)
+                restart = _run_interactive_loop(
+                    run_turn=agent_session.run,
+                    stream_turn=stream_turn,
+                    audit_repo=audit_repo,
+                    session_id=thread_id,
+                    supports_clear=True,
+                )
+
+        if not restart:
+            break
+        thread_id = None
+        console.print("[dim]Conversation cleared. Starting fresh.[/]")
 
 
 def _run_interactive_loop(
@@ -255,7 +271,9 @@ def _run_interactive_loop(
     audit_repo: AuditRepository | None,
     session_id: str,
     stream_turn: Callable[[str], Iterable[StreamEvent]] | None = None,
-) -> None:
+    supports_clear: bool = False,
+) -> bool:
+    """Run the REPL loop. Returns True if the caller should restart with a fresh session."""
     while True:
         try:
             console.print("  [bold cyan]easy-claw>[/] ", end="")
@@ -266,6 +284,11 @@ def _run_interactive_loop(
         if prompt.lower() in {"exit", "quit", ":q"}:
             break
         if prompt == "":
+            continue
+        if prompt.lower() == "/clear":
+            if supports_clear:
+                return True
+            console.print("[dim]History clearing is not supported in dry-run mode.[/]")
             continue
 
         if stream_turn is not None:
@@ -281,6 +304,8 @@ def _run_interactive_loop(
                 event_type="agent_run",
                 payload={"session_id": session_id, "prompt_length": len(prompt)},
             )
+
+    return False
 
 
 def _agent_request_for_prompt(request: AgentRequest, prompt: str) -> AgentRequest:
@@ -426,6 +451,17 @@ def _format_stream_value(value: object) -> str:
     return text[:STREAM_PANEL_VALUE_LIMIT] + "\n[truncated]"
 
 
+def _count_mcp_servers(config_path: str) -> int:
+    try:
+        import json
+        data = json.loads(Path(config_path).read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return len(data)
+    except Exception:
+        pass
+    return 0
+
+
 def _render_startup_banner(config: "AppConfig") -> None:  # noqa: F821
     """Render a startup banner showing current configuration."""
     approval_color = {"permissive": "green", "balanced": "yellow", "strict": "red"}
@@ -441,6 +477,11 @@ def _render_startup_banner(config: "AppConfig") -> None:  # noqa: F821
         f"[{color}]{config.approval_mode}[/]",
     )
     grid.add_row("Browser:", "enabled" if config.browser_enabled else "disabled")
+    mcp_status = "disabled"
+    if config.mcp_enabled:
+        count = _count_mcp_servers(config.mcp_config_path)
+        mcp_status = f"enabled ({count} servers)" if count else "enabled"
+    grid.add_row("MCP tools:", mcp_status)
 
     banner = Panel(
         grid,
@@ -449,7 +490,7 @@ def _render_startup_banner(config: "AppConfig") -> None:  # noqa: F821
         border_style="cyan",
     )
     console.print(banner)
-    console.print("[dim]Type :q, exit or quit to leave. Empty line to skip.[/]")
+    console.print("[dim]Type :q, exit or quit to leave. /clear to reset conversation. Empty line to skip.[/]")
     console.print()
 
 
