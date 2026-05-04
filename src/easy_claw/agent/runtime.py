@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Mapping, Sequence
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
 from easy_claw.agent.middleware import build_agent_middleware
 from easy_claw.agent.toolset import build_easy_claw_tools
-from easy_claw.agent.types import CleanupCallback, ToolContext
+from easy_claw.agent.types import ToolContext
 from easy_claw.config import AppConfig
 
 
@@ -131,8 +132,10 @@ class DeepAgentsRuntime:
         )
         interrupt_on = _build_interrupt_on(cfg.approval_mode, tool_bundle.interrupt_on)
 
-        checkpointer_context = SqliteSaver.from_conn_string(str(cfg.checkpoint_db_path))
-        checkpointer = checkpointer_context.__enter__()
+        stack = ExitStack()
+        checkpointer = stack.enter_context(
+            SqliteSaver.from_conn_string(str(cfg.checkpoint_db_path))
+        )
         agent = create_deep_agent(
             model=_build_chat_model(cfg.model, cfg.base_url, cfg.api_key),
             tools=tool_bundle.tools,
@@ -146,12 +149,13 @@ class DeepAgentsRuntime:
             checkpointer=checkpointer,
             interrupt_on=interrupt_on,
         )
+        for cb in tool_bundle.cleanup:
+            stack.callback(cb)
         return DeepAgentSession(
             agent=agent,
             thread_id=request.thread_id,
             reviewer=self._reviewer,
-            checkpointer_context=checkpointer_context,
-            cleanup_callbacks=tool_bundle.cleanup,
+            exit_stack=stack,
         )
 
 
@@ -162,14 +166,12 @@ class DeepAgentSession:
         agent: Any,
         thread_id: str,
         reviewer: ApprovalReviewer,
-        checkpointer_context: object,
-        cleanup_callbacks: Sequence[CleanupCallback] = (),
+        exit_stack: ExitStack,
     ) -> None:
         self._agent = agent
         self._thread_id = thread_id
         self._reviewer = reviewer
-        self._checkpointer_context = checkpointer_context
-        self._cleanup_callbacks = tuple(cleanup_callbacks)
+        self._exit_stack = exit_stack
 
     def __enter__(self) -> DeepAgentSession:
         return self
@@ -178,11 +180,7 @@ class DeepAgentSession:
         self.close()
 
     def close(self) -> None:
-        try:
-            for callback in self._cleanup_callbacks:
-                callback()
-        finally:
-            self._checkpointer_context.__exit__(None, None, None)
+        self._exit_stack.close()
 
     def run(self, prompt: str) -> AgentResult:
         result = _invoke_with_approval(

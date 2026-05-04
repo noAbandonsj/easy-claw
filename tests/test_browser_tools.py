@@ -14,22 +14,29 @@ def test_build_browser_tools_skips_browser_when_disabled():
 def test_build_browser_tools_creates_langchain_playwright_tools(monkeypatch):
     captured = {}
     closed = []
-    fake_tools = [object(), object()]
 
     class FakeBrowser:
-        def close(self):
+        async def close(self):
             closed.append("closed")
 
     fake_browser = FakeBrowser()
 
-    def fake_create_browser(*, headless):
+    async def fake_launch(*, headless):
         captured["headless"] = headless
         return fake_browser
 
+    class FakeTool:
+        def __init__(self, name):
+            self.name = name
+            self._run = None
+            self._arun = None
+
+    fake_tools = [FakeTool("t1"), FakeTool("t2")]
+
     class FakeToolkit:
         @classmethod
-        def from_browser(cls, *, sync_browser):
-            captured["sync_browser"] = sync_browser
+        def from_browser(cls, *, async_browser, sync_browser=None):
+            captured["async_browser"] = async_browser
             return cls()
 
         def get_tools(self):
@@ -40,9 +47,8 @@ def test_build_browser_tools_creates_langchain_playwright_tools(monkeypatch):
         lambda *, headless: True,
     )
     monkeypatch.setattr(
-        "easy_claw.tools.browser.create_sync_playwright_browser",
-        fake_create_browser,
-        raising=False,
+        "easy_claw.tools.browser._async_launch_browser",
+        fake_launch,
     )
     monkeypatch.setattr(
         "easy_claw.tools.browser.PlayWrightBrowserToolkit",
@@ -52,8 +58,11 @@ def test_build_browser_tools_creates_langchain_playwright_tools(monkeypatch):
 
     bundle = build_browser_tools(enabled=True, headless=True)
 
-    assert captured == {"headless": True, "sync_browser": fake_browser}
+    assert captured == {"headless": True, "async_browser": fake_browser}
     assert bundle.tools == fake_tools
+    # _run is patched to a sync wrapper around _arun
+    for tool in fake_tools:
+        assert callable(tool._run)
 
     bundle.close()
 
@@ -61,12 +70,12 @@ def test_build_browser_tools_creates_langchain_playwright_tools(monkeypatch):
 
 
 def test_build_browser_tools_raises_when_playwright_not_installed(monkeypatch):
+    async def fake_launch(*, headless):
+        raise Exception("Executable doesn't exist\nplaywright install\n")
+
     monkeypatch.setattr(
-        "easy_claw.tools.browser.create_sync_playwright_browser",
-        lambda **_: (_ for _ in ()).throw(
-            Exception("Executable doesn't exist\nplaywright install\n")
-        ),
-        raising=False,
+        "easy_claw.tools.browser._async_launch_browser",
+        fake_launch,
     )
     monkeypatch.setattr("easy_claw.tools.browser._check_playwright_browsers", lambda *, headless: True)
     monkeypatch.setattr(

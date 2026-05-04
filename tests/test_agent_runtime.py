@@ -1,3 +1,4 @@
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -321,11 +322,6 @@ class FakeStreamMessage:
     content: str
 
 
-class NullCheckpointerContext:
-    def __exit__(self, exc_type, exc, traceback):
-        pass
-
-
 class FakeStreamingAgent:
     def __init__(self):
         self.inputs = []
@@ -354,7 +350,7 @@ def test_deepagent_session_stream_yields_tokens_and_done():
         agent=agent,
         thread_id="thread-1",
         reviewer=StaticApprovalReviewer(approve=True),
-        checkpointer_context=NullCheckpointerContext(),
+        exit_stack=ExitStack(),
     )
 
     events = list(session.stream("say hello"))
@@ -431,7 +427,7 @@ def test_deepagent_session_stream_done_content_ignores_tool_results():
         agent=FakeStreamingToolResultAgent(),
         thread_id="thread-1",
         reviewer=StaticApprovalReviewer(approve=True),
-        checkpointer_context=NullCheckpointerContext(),
+        exit_stack=ExitStack(),
     )
 
     events = list(session.stream("read README"))
@@ -475,7 +471,7 @@ def test_deepagent_session_stream_resumes_after_interrupt():
         agent=agent,
         thread_id="thread-1",
         reviewer=StaticApprovalReviewer(approve=True),
-        checkpointer_context=NullCheckpointerContext(),
+        exit_stack=ExitStack(),
     )
 
     events = list(session.stream("run tests"))
