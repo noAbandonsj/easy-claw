@@ -210,7 +210,10 @@ def chat(
     prompt: Annotated[str | None, typer.Argument()] = None,
     dry_run: bool = typer.Option(False, "--dry-run"),
     interactive: bool = typer.Option(False, "--interactive", "-i"),
-    model: Annotated[str | None, typer.Option("--model", help="Override the model (e.g. deepseek-chat).")] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", help="Override the model (e.g. deepseek-chat)."),
+    ] = None,
 ) -> None:
     """Start the interactive AI assistant (run without args for interactive mode)."""
     config = load_config()
@@ -325,8 +328,8 @@ def _run_interactive_chat(
 
         if open_session is None:
             restart = _run_interactive_loop(
-                run_turn=lambda prompt: runtime.run(
-                    _agent_request_for_prompt(base_request, prompt)
+                run_turn=lambda prompt, req=base_request: runtime.run(
+                    _agent_request_for_prompt(req, prompt)
                 ),
                 audit_repo=audit_repo,
                 session_id=thread_id,

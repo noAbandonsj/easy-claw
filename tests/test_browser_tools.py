@@ -82,7 +82,10 @@ def test_build_browser_tools_raises_when_playwright_not_installed(monkeypatch):
         "easy_claw.tools.browser._async_launch_browser",
         fake_launch,
     )
-    monkeypatch.setattr("easy_claw.tools.browser._check_playwright_browsers", lambda *, headless: True)
+    monkeypatch.setattr(
+        "easy_claw.tools.browser._check_playwright_browsers",
+        lambda *, headless: True,
+    )
     monkeypatch.setattr(
         "easy_claw.tools.browser.PlayWrightBrowserToolkit",
         object(),
