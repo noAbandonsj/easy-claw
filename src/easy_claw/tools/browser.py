@@ -36,7 +36,8 @@ def _check_playwright_browsers(*, headless: bool) -> bool:
 
 async def _async_launch_browser(*, headless: bool):
     pw = await async_playwright().start()
-    return await pw.chromium.launch(headless=headless)
+    browser = await pw.chromium.launch(headless=headless)
+    return pw, browser
 
 
 def _patch_tool_sync_run(tool):
@@ -71,7 +72,7 @@ def build_browser_tools(*, enabled: bool, headless: bool) -> ToolBundle:
         )
 
     try:
-        async_browser = asyncio.run(_async_launch_browser(headless=headless))
+        pw, async_browser = asyncio.run(_async_launch_browser(headless=headless))
     except Exception as exc:
         msg = str(exc)
         if "Executable" in msg or "playwright install" in msg:
@@ -91,14 +92,15 @@ def build_browser_tools(*, enabled: bool, headless: bool) -> ToolBundle:
 
     return ToolBundle(
         tools=tools,
-        cleanup=(_close_browser_callback(async_browser),),
+        cleanup=(_close_browser_callback(pw, async_browser),),
     )
 
 
-def _close_browser_callback(browser):
+def _close_browser_callback(pw, browser):
     def close_browser() -> None:
         async def _close():
             await browser.close()
+            await pw.stop()
 
         try:
             asyncio.run(_close())

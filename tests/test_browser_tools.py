@@ -17,13 +17,18 @@ def test_build_browser_tools_creates_langchain_playwright_tools(monkeypatch):
 
     class FakeBrowser:
         async def close(self):
-            closed.append("closed")
+            closed.append("browser_closed")
+
+    class FakePlaywright:
+        async def stop(self):
+            closed.append("pw_stopped")
 
     fake_browser = FakeBrowser()
+    fake_pw = FakePlaywright()
 
     async def fake_launch(*, headless):
         captured["headless"] = headless
-        return fake_browser
+        return fake_pw, fake_browser
 
     class FakeTool:
         def __init__(self, name):
@@ -66,7 +71,7 @@ def test_build_browser_tools_creates_langchain_playwright_tools(monkeypatch):
 
     bundle.close()
 
-    assert closed == ["closed"]
+    assert closed == ["browser_closed", "pw_stopped"]
 
 
 def test_build_browser_tools_raises_when_playwright_not_installed(monkeypatch):
