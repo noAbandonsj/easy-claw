@@ -27,7 +27,7 @@ class AppConfig:
     search_backend: str = "auto"
     tavily_api_key: str | None = None
     mcp_enabled: bool = False
-    mcp_mode: str = "disabled"
+    mcp_mode: str = "auto"
     mcp_config_path: str = "mcp_servers.json"
     max_model_calls: int | None = DEFAULT_MAX_MODEL_CALLS
     max_tool_calls: int | None = DEFAULT_MAX_TOOL_CALLS
@@ -54,7 +54,7 @@ def _read_optional_int(value: str | None, default: int | None) -> int | None:
 
 def _read_mcp_mode(value: str | None) -> str:
     if value is None or value.strip() == "":
-        return "disabled"
+        return "auto"
     normalized = value.strip().lower()
     if normalized == "auto":
         return "auto"

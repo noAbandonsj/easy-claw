@@ -31,6 +31,7 @@ def _test_config(*, tmp_path: Path, **kwargs: object) -> AppConfig:
         "model": "deepseek-v4-pro",
         "base_url": "https://api.deepseek.com",
         "api_key": "test-key",
+        "mcp_mode": "disabled",
     }
     defaults.update(kwargs)
     return AppConfig(**defaults)

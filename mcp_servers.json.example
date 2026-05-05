@@ -4,10 +4,5 @@
         "command": "uvx",
         "args": ["basic-memory", "mcp"],
         "transport": "stdio"
-    },
-    "filesystem": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
-        "transport": "stdio"
     }
 }

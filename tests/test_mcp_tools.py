@@ -1,7 +1,16 @@
+from pathlib import Path
+
 import pytest
 
 from easy_claw.tools.base import ToolExecutionError
-from easy_claw.tools.mcp import build_mcp_tools
+from easy_claw.tools.mcp import _read_servers_config, build_mcp_tools
+
+
+def test_default_example_config_contains_only_basic_memory_server():
+    config = _read_servers_config(Path("mcp_servers.json.example"), auto_mode=False)
+
+    assert set(config) == {"basic-memory"}
+    assert config["basic-memory"]["transport"] == "stdio"
 
 
 class TestBuildMcpToolsDisabled:

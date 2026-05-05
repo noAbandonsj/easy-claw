@@ -244,20 +244,20 @@ EASY_CLAW_BROWSER_HEADLESS=false
 
 ## MCP 工具
 
-MCP 默认关闭，保证没有额外本地服务时也能稳定启动。需要持久记忆或外部工具时，复制并编辑配置：
+MCP 默认使用 `auto` 模式：有可用配置时自动加载，缺配置或 server 启动失败时不会阻断 Agent 启动。需要持久记忆或外部工具时，复制并编辑配置：
 
 ```powershell
 Copy-Item mcp_servers.json.example mcp_servers.json
 ```
-
-推荐先使用 `auto` 模式：
 
 ```env
 EASY_CLAW_MCP_ENABLED=auto
 EASY_CLAW_MCP_CONFIG=mcp_servers.json
 ```
 
-`auto` 只会在配置文件存在且 server 可用时加载 MCP 工具；配置缺失会跳过，单个 server 启动失败会警告并继续加载其他 server。若希望显式启用并在配置错误时快速失败，设置 `EASY_CLAW_MCP_ENABLED=true`。
+默认示例只启用 `basic-memory`，用于跨会话持久记忆。`filesystem` MCP 与 easy-claw / DeepAgents 已有的文件读写工具重叠，还会引入 Node / npx 依赖，不作为默认配置；确实需要 MCP filesystem 时，可以自行把它加入 `mcp_servers.json`。
+
+若希望显式启用并在配置错误时快速失败，设置 `EASY_CLAW_MCP_ENABLED=true`；若希望完全关闭 MCP，设置 `EASY_CLAW_MCP_ENABLED=false`。
 
 ---
 

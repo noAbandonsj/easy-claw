@@ -24,7 +24,7 @@ def test_load_config_uses_local_data_dir(tmp_path, monkeypatch):
     assert config.browser_enabled is False
     assert config.browser_headless is False
     assert config.mcp_enabled is False
-    assert config.mcp_mode == "disabled"
+    assert config.mcp_mode == "auto"
     assert config.mcp_config_path == "mcp_servers.json"
     assert config.max_model_calls == 40
     assert config.max_tool_calls == 100
