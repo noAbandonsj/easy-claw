@@ -23,9 +23,7 @@ def build_mcp_tools(*, enabled: bool, config_path: str) -> ToolBundle:
         return ToolBundle()
 
     if MultiServerMCPClient is None:
-        raise ToolExecutionError(
-            "MCP tools require langchain-mcp-adapters. Run: uv sync"
-        )
+        raise ToolExecutionError("MCP tools require langchain-mcp-adapters. Run: uv sync")
 
     config_file = Path(config_path)
     if not config_file.exists():
@@ -37,9 +35,7 @@ def build_mcp_tools(*, enabled: bool, config_path: str) -> ToolBundle:
     try:
         servers_config = json.loads(config_file.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise ToolExecutionError(
-            f"Invalid JSON in MCP config file '{config_file}': {exc}"
-        ) from exc
+        raise ToolExecutionError(f"Invalid JSON in MCP config file '{config_file}': {exc}") from exc
 
     if not isinstance(servers_config, dict) or not servers_config:
         raise ToolExecutionError(

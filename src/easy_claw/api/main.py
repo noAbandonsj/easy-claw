@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -41,6 +42,13 @@ def _event_to_dict(event: StreamEvent) -> dict[str, object]:
     if event.usage:
         msg["usage"] = event.usage
     return msg
+
+
+def _next_stream_event_or_none(stream_iter: Iterator[StreamEvent]) -> StreamEvent | None:
+    try:
+        return next(stream_iter)
+    except StopIteration:
+        return None
 
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
@@ -96,18 +104,18 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             title="Web Chat",
         )
 
-        skill_sources = discover_skill_sources(
-            config.cwd / "skills", config.default_workspace
-        )
+        skill_sources = discover_skill_sources(config.cwd / "skills", config.default_workspace)
         runtime = DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True))
 
-        await websocket.send_json({
-            "type": "banner",
-            "model": config.model,
-            "workspace": str(config.default_workspace),
-            "version": "0.5.0",
-            "session_id": session.id[:8],
-        })
+        await websocket.send_json(
+            {
+                "type": "banner",
+                "model": config.model,
+                "workspace": str(config.default_workspace),
+                "version": "0.5.0",
+                "session_id": session.id[:8],
+            }
+        )
 
         agent_session = runtime.open_session(
             AgentRequest(
@@ -131,9 +139,12 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 loop = asyncio.get_running_loop()
                 stream_iter = agent_session.stream(text)
                 while True:
-                    try:
-                        event = await loop.run_in_executor(None, next, stream_iter)
-                    except StopIteration:
+                    event = await loop.run_in_executor(
+                        None,
+                        _next_stream_event_or_none,
+                        stream_iter,
+                    )
+                    if event is None:
                         break
                     await websocket.send_json(_event_to_dict(event))
         except WebSocketDisconnect:
@@ -143,5 +154,6 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     app.mount("/static", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
     return app
+
 
 app = create_app()

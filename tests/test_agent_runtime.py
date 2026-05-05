@@ -74,10 +74,13 @@ def test_build_chat_model_works_with_custom_base_url(monkeypatch):
 
 
 def test_build_interrupt_on_defaults_permissive_to_no_interrupts():
-    assert _build_interrupt_on(
-        "permissive",
-        {"run_command": True, "custom_risky_tool": True},
-    ) == {}
+    assert (
+        _build_interrupt_on(
+            "permissive",
+            {"run_command": True, "custom_risky_tool": True},
+        )
+        == {}
+    )
 
 
 def test_build_interrupt_on_balanced_uses_tool_bundle_policy():

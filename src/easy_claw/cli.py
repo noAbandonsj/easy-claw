@@ -186,9 +186,7 @@ def delete_session(
     if not force:
         from typer import confirm
 
-        if not confirm(
-            f"Delete session [bold]{matched.title}[/] ({matched.id[:8]})?"
-        ):
+        if not confirm(f"Delete session [bold]{matched.title}[/] ({matched.id[:8]})?"):
             raise typer.Exit()
 
     repo.delete_session(matched.id)
@@ -392,7 +390,7 @@ def _run_interactive_chat(
         if not restart:
             break
         if restart.startswith("/workspace "):
-            new_path = Path(restart[len("/workspace "):]).resolve()
+            new_path = Path(restart[len("/workspace ") :]).resolve()
             if not new_path.is_dir():
                 console.print(f"[yellow]Not a directory: {new_path}[/]")
                 continue

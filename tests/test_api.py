@@ -1,6 +1,9 @@
+import asyncio
+
 from fastapi.testclient import TestClient
 
-from easy_claw.api.main import create_app
+from easy_claw.agent.runtime import StreamEvent
+from easy_claw.api.main import _next_stream_event_or_none, create_app
 from easy_claw.storage.repositories import SessionRecord
 
 
@@ -50,3 +53,21 @@ def test_runs_endpoint_is_removed():
     response = client.post("/runs", json={"prompt": "总结", "document_paths": ["README.md"]})
 
     assert response.status_code == 404
+
+
+def test_next_stream_event_or_none_returns_event_from_executor():
+    event = StreamEvent(type="done", content="ok")
+
+    async def call_in_executor():
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _next_stream_event_or_none, iter([event]))
+
+    assert asyncio.run(call_in_executor()) == event
+
+
+def test_next_stream_event_or_none_returns_none_from_executor_when_exhausted():
+    async def call_in_executor():
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _next_stream_event_or_none, iter(()))
+
+    assert asyncio.run(call_in_executor()) is None

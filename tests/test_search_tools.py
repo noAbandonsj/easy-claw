@@ -18,9 +18,7 @@ class FakeSearchBackend:
     def text(self, query, *, max_results):
         assert query == "DeepSeek API"
         assert max_results == 3
-        return [
-            {"title": "DeepSeek Docs", "href": "https://api-docs.deepseek.com", "body": "Docs"}
-        ]
+        return [{"title": "DeepSeek Docs", "href": "https://api-docs.deepseek.com", "body": "Docs"}]
 
 
 def test_search_web_returns_normalized_results():
@@ -101,11 +99,7 @@ def test_tavily_backend_calls_search_and_normalizes(monkeypatch):
         def search(self, query, max_results=None, include_raw_content=None):
             captured["query"] = query
             captured["max_results"] = max_results
-            return {
-                "results": [
-                    {"title": "T", "url": "https://t.com", "content": "body text"}
-                ]
-            }
+            return {"results": [{"title": "T", "url": "https://t.com", "content": "body text"}]}
 
     monkeypatch.setattr("tavily.TavilyClient", FakeTavilyClient)
 

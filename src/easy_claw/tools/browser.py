@@ -64,16 +64,13 @@ def build_browser_tools(*, enabled: bool, headless: bool) -> ToolBundle:
 
     if not _check_playwright_browsers(headless=headless):
         raise ToolExecutionError(
-            "Playwright Chromium browser is not installed. "
-            "Run: uv run playwright install chromium"
+            "Playwright Chromium browser is not installed. Run: uv run playwright install chromium"
         )
 
     loop = get_background_loop()
 
     try:
-        pw, async_browser = loop.run_coroutine(
-            _async_launch_browser(headless=headless)
-        )
+        pw, async_browser = loop.run_coroutine(_async_launch_browser(headless=headless))
     except Exception as exc:
         msg = str(exc)
         if "Executable" in msg or "playwright install" in msg:
@@ -81,9 +78,7 @@ def build_browser_tools(*, enabled: bool, headless: bool) -> ToolBundle:
                 "Playwright Chromium browser is not installed. "
                 "Run: uv run playwright install chromium"
             ) from exc
-        raise ToolExecutionError(
-            f"Failed to launch browser: {exc}"
-        ) from exc
+        raise ToolExecutionError(f"Failed to launch browser: {exc}") from exc
 
     toolkit = PlayWrightBrowserToolkit.from_browser(async_browser=async_browser)
     tools = list(toolkit.get_tools())

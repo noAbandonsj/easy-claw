@@ -26,7 +26,6 @@ def test_browser_launch_navigate_extract():
     try:
         page = loop.run_coroutine(browser.new_page())
         loop.run_coroutine(page.goto("data:text/html,<h1>Hello easy-claw</h1>"))
-        title = loop.run_coroutine(page.title())
         text = loop.run_coroutine(page.inner_text("h1"))
 
         assert "Hello easy-claw" in text

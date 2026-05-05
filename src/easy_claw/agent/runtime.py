@@ -228,17 +228,20 @@ def _build_interrupt_on(
 
 
 def _build_system_prompt() -> str:
-    return "\n\n".join([
-        "You are easy-claw, an agent-first Windows personal code assistant.",
-        "The user should describe tasks naturally; do not ask them to manually run "
-        "docs/tools/dev commands.",
-        "Use available tools proactively to read files, run tests, inspect projects, "
-        "and search the web.",
-        "Operate inside the selected workspace unless the user explicitly asks for another path.",
-        "You have access to Basic Memory tools (write_note, search_notes, read_note, etc.) "
-        "if configured via MCP. Use them to remember important facts and search for past "
-        "information across sessions.",
-    ])
+    return "\n\n".join(
+        [
+            "You are easy-claw, an agent-first Windows personal code assistant.",
+            "The user should describe tasks naturally; do not ask them to manually run "
+            "docs/tools/dev commands.",
+            "Use available tools proactively to read files, run tests, inspect projects, "
+            "and search the web.",
+            "Operate inside the selected workspace unless the user explicitly asks "
+            "for another path.",
+            "You have access to Basic Memory tools (write_note, search_notes, read_note, etc.) "
+            "if configured via MCP. Use them to remember important facts and search for past "
+            "information across sessions.",
+        ]
+    )
 
 
 def _extract_last_message_info(result: object) -> tuple[str, dict[str, int] | None]:

@@ -32,9 +32,7 @@ class TestBuildMcpToolsConfigErrors:
 
     def test_raises_when_dependency_not_installed(self, tmp_path, monkeypatch):
         config_file = tmp_path / "servers.json"
-        config_file.write_text(
-            '{"srv": {"command": "echo", "args": ["hi"], "transport": "stdio"}}'
-        )
+        config_file.write_text('{"srv": {"command": "echo", "args": ["hi"], "transport": "stdio"}}')
         monkeypatch.setattr("easy_claw.tools.mcp.MultiServerMCPClient", None)
         with pytest.raises(ToolExecutionError, match="langchain-mcp-adapters"):
             build_mcp_tools(enabled=True, config_path=str(config_file))
@@ -49,9 +47,7 @@ class TestBuildMcpToolsConfigErrors:
 class TestBuildMcpToolsSuccess:
     def test_creates_client_and_returns_tools_and_cleanup(self, tmp_path, monkeypatch):
         config_file = tmp_path / "servers.json"
-        config_file.write_text(
-            '{"srv": {"command": "echo", "args": ["hi"], "transport": "stdio"}}'
-        )
+        config_file.write_text('{"srv": {"command": "echo", "args": ["hi"], "transport": "stdio"}}')
 
         closed = []
 
@@ -91,9 +87,7 @@ class TestBuildMcpToolsSuccess:
 
     def test_cleanup_handles_client_without_close_method(self, tmp_path, monkeypatch):
         config_file = tmp_path / "servers.json"
-        config_file.write_text(
-            '{"srv": {"command": "echo", "args": ["hi"], "transport": "stdio"}}'
-        )
+        config_file.write_text('{"srv": {"command": "echo", "args": ["hi"], "transport": "stdio"}}')
 
         class FakeTool:
             def __init__(self, name):

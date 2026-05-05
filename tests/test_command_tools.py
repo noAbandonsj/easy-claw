@@ -2,7 +2,7 @@ from easy_claw.tools.commands import run_command
 
 
 def test_run_command_captures_output(tmp_path):
-    result = run_command('python -c "print(\'hello\')"', cwd=tmp_path, timeout_seconds=5)
+    result = run_command("python -c \"print('hello')\"", cwd=tmp_path, timeout_seconds=5)
 
     assert result.exit_code == 0
     assert result.stdout.strip() == "hello"
@@ -10,7 +10,7 @@ def test_run_command_captures_output(tmp_path):
 
 def test_run_command_truncates_long_output(tmp_path):
     result = run_command(
-        'python -c "print(\'x\' * 100)"',
+        "python -c \"print('x' * 100)\"",
         cwd=tmp_path,
         timeout_seconds=5,
         max_output_chars=10,
