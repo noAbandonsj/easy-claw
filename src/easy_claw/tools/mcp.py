@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
 
 from easy_claw.agent.types import ToolBundle
-from easy_claw.tools.base import ToolExecutionError
+from easy_claw.tools.base import ToolExecutionError, get_background_loop
 
 try:
     from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -48,13 +47,14 @@ def build_mcp_tools(*, enabled: bool, config_path: str) -> ToolBundle:
             "JSON object mapping server names to server configs."
         )
 
-    client, tools = asyncio.run(_async_init_mcp(servers_config))
+    loop = get_background_loop()
+    client, tools = loop.run_coroutine(_async_init_mcp(servers_config))
 
     interrupt_on = {tool.name: True for tool in tools}
 
     return ToolBundle(
         tools=list(tools),
-        cleanup=(_make_mcp_cleanup(client),),
+        cleanup=(_make_mcp_cleanup(loop, client),),
         interrupt_on=interrupt_on,
     )
 
@@ -65,7 +65,7 @@ async def _async_init_mcp(servers_config: dict) -> tuple[object, list[object]]:
     return client, tools
 
 
-def _make_mcp_cleanup(client: object):
+def _make_mcp_cleanup(loop, client: object):
     def cleanup() -> None:
         async def _close() -> None:
             close = getattr(client, "close", None)
@@ -73,8 +73,8 @@ def _make_mcp_cleanup(client: object):
                 await close()
 
         try:
-            asyncio.run(_close())
-        except RuntimeError:
+            loop.run_coroutine(_close())
+        except (RuntimeError, OSError):
             pass
 
     return cleanup

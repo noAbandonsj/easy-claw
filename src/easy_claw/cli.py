@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import sys
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Annotated
@@ -84,6 +85,42 @@ def doctor() -> None:
     console.print(f"max_tool_calls: {config.max_tool_calls}")
     api_key_display = "***" + config.api_key[-4:] if config.api_key else "<not configured>"
     console.print(f"api_key: {api_key_display}")
+
+    # Browser diagnostics
+    console.print()
+    console.print("[bold]Browser diagnostics[/]")
+    try:
+        from easy_claw.tools.browser import _check_playwright_browsers
+    except ImportError:
+        console.print("[yellow]playwright package not installed[/]")
+        return
+
+    chromium_installed = _check_playwright_browsers(headless=False)
+    headless_installed = _check_playwright_browsers(headless=True)
+    console.print(
+        f"Chromium (headed): {'installed' if chromium_installed else '[red]not installed[/]'}"
+    )
+    console.print(
+        f"Chromium (headless): {'installed' if headless_installed else '[red]not installed[/]'}"
+    )
+
+    if not chromium_installed and not headless_installed:
+        console.print("[dim]Run: uv run playwright install chromium[/]")
+        return
+
+    # Live browser test — launch, navigate, extract text, close
+    if config.browser_enabled:
+        console.print("[dim]Testing browser launch and navigation...[/]")
+        try:
+            from easy_claw.tools.browser import build_browser_tools
+
+            bundle = build_browser_tools(enabled=True, headless=True)
+            console.print(f"[green]Browser launched[/] — {len(bundle.tools)} tools loaded")
+            for cb in bundle.cleanup:
+                cb()
+            console.print("[green]Browser closed cleanly[/]")
+        except Exception as exc:
+            console.print(f"[red]Browser test failed: {exc}[/]")
 
 
 @app.command("init-db", rich_help_panel="Management")
@@ -395,16 +432,21 @@ def _run_interactive_loop(
     while True:
         try:
             console.print(Rule(style="hot_pink"))
-            console.print("  [bold cyan]>[/] ", end="")
-            prompt = input().strip()
+            console.print("[bold hot_pink]>[/] ", end="")
+            sys.stdout.write("\n")
             console.print(Rule(style="hot_pink"))
+            sys.stdout.write("\033[2A\033[2C\033[38;5;205m")
+            sys.stdout.flush()
+            prompt = input().strip()
+            sys.stdout.write("\033[0m\n")
+            sys.stdout.flush()
         except EOFError:
             console.print()
             break
+        if not prompt:
+            continue
         if prompt.lower() in {"exit", "quit", ":q"}:
             break
-        if prompt == "":
-            continue
         if prompt.lower() == "/clear":
             if supports_clear:
                 return "clear"
@@ -443,7 +485,6 @@ def _run_interactive_loop(
             response = result.content
             usage = result.usage
             console.print(response)
-            console.print(Rule(style="dim"))
 
         conversation.append((prompt, response))
         if usage:
@@ -544,47 +585,50 @@ def _render_streaming_turn(events: Iterable[StreamEvent]) -> tuple[str, dict[str
     spinner = console.status("[dim]Thinking...[/]")
     spinner.start()
     spinner_running = True
-    for event in events:
-        if spinner_running:
-            spinner.stop()
-            spinner_running = False
-        if event.type == "token":
-            console.print(event.content, end="")
-            tokens.append(event.content)
-            printed_token = True
-        elif event.type == "tool_call_start":
-            _print_stream_separator(printed_token)
-            console.print(
-                Panel(
-                    _format_stream_value(event.tool_args),
-                    title=f"Tool call: {event.tool_name or 'unknown'}",
-                    border_style="blue",
-                )
-            )
-            printed_token = False
-        elif event.type == "tool_call_result":
-            _print_stream_separator(printed_token)
-            console.print(
-                Panel(
-                    _format_stream_value(event.content or event.tool_result),
-                    title=f"Tool result: {event.tool_name or 'unknown'}",
-                    border_style="green",
-                )
-            )
-            printed_token = False
-        elif event.type == "approval_required":
-            _print_stream_separator(printed_token)
-            console.print("[yellow]Tool execution requires approval[/]")
-            printed_token = False
-        elif event.type == "done":
+    try:
+        for event in events:
             if spinner_running:
                 spinner.stop()
                 spinner_running = False
-            if printed_token:
-                console.print()
-            printed_token = False
-            usage = event.usage
-    console.print(Rule(style="dim"))
+            if event.type == "token":
+                console.print(event.content, end="")
+                tokens.append(event.content)
+                printed_token = True
+            elif event.type == "tool_call_start":
+                _print_stream_separator(printed_token)
+                console.print(
+                    Panel(
+                        _format_stream_value(event.tool_args),
+                        title=f"Tool call: {event.tool_name or 'unknown'}",
+                        border_style="blue",
+                    )
+                )
+                printed_token = False
+            elif event.type == "tool_call_result":
+                _print_stream_separator(printed_token)
+                console.print(
+                    Panel(
+                        _format_stream_value(event.content or event.tool_result),
+                        title=f"Tool result: {event.tool_name or 'unknown'}",
+                        border_style="green",
+                    )
+                )
+                printed_token = False
+            elif event.type == "approval_required":
+                _print_stream_separator(printed_token)
+                console.print("[yellow]Tool execution requires approval[/]")
+                printed_token = False
+            elif event.type == "done":
+                if spinner_running:
+                    spinner.stop()
+                    spinner_running = False
+                if printed_token:
+                    console.print()
+                printed_token = False
+                usage = event.usage
+    finally:
+        if spinner_running:
+            spinner.stop()
     return "".join(tokens), usage
 
 
@@ -678,12 +722,11 @@ def _format_stream_value(value: object) -> str:
             text = str(value)
     if len(text) <= STREAM_PANEL_VALUE_LIMIT:
         return text
-    return text[:STREAM_PANEL_VALUE_LIMIT] + "\n[truncated]"
+    return text[:STREAM_PANEL_VALUE_LIMIT] + "\n\\[truncated]"
 
 
 def _count_mcp_servers(config_path: str) -> int:
     try:
-        import json
         data = json.loads(Path(config_path).read_text(encoding="utf-8"))
         if isinstance(data, dict):
             return len(data)

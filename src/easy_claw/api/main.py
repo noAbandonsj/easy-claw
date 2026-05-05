@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -123,7 +124,17 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 if not text.strip():
                     continue
 
-                for event in agent_session.stream(text):
+                # Run the synchronous stream iterator in a thread so the
+                # asyncio event loop is not blocked while waiting for LLM
+                # tokens.  Events are forwarded to the WebSocket as they
+                # arrive.
+                loop = asyncio.get_running_loop()
+                stream_iter = agent_session.stream(text)
+                while True:
+                    try:
+                        event = await loop.run_in_executor(None, next, stream_iter)
+                    except StopIteration:
+                        break
                     await websocket.send_json(_event_to_dict(event))
         except WebSocketDisconnect:
             pass
