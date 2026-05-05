@@ -126,6 +126,7 @@ class DeepAgentsRuntime:
                 browser_enabled=cfg.browser_enabled,
                 browser_headless=cfg.browser_headless,
                 mcp_enabled=cfg.mcp_enabled,
+                mcp_mode=cfg.mcp_mode,
                 mcp_config_path=cfg.mcp_config_path,
             )
         )

@@ -9,6 +9,8 @@ def test_load_config_uses_local_data_dir(tmp_path, monkeypatch):
     monkeypatch.delenv("EASY_CLAW_EXECUTION_MODE", raising=False)
     monkeypatch.delenv("EASY_CLAW_BROWSER_ENABLED", raising=False)
     monkeypatch.delenv("EASY_CLAW_BROWSER_HEADLESS", raising=False)
+    monkeypatch.delenv("EASY_CLAW_MCP_ENABLED", raising=False)
+    monkeypatch.delenv("EASY_CLAW_MCP_CONFIG", raising=False)
     monkeypatch.delenv("EASY_CLAW_MAX_MODEL_CALLS", raising=False)
     monkeypatch.delenv("EASY_CLAW_MAX_TOOL_CALLS", raising=False)
 
@@ -22,6 +24,7 @@ def test_load_config_uses_local_data_dir(tmp_path, monkeypatch):
     assert config.browser_enabled is False
     assert config.browser_headless is False
     assert config.mcp_enabled is False
+    assert config.mcp_mode == "disabled"
     assert config.mcp_config_path == "mcp_servers.json"
     assert config.max_model_calls == 40
     assert config.max_tool_calls == 100
@@ -56,9 +59,19 @@ def test_load_config_reads_env_overrides(tmp_path, monkeypatch):
     assert config.browser_enabled is True
     assert config.browser_headless is True
     assert config.mcp_enabled is True
+    assert config.mcp_mode == "enabled"
     assert config.mcp_config_path == "my_mcp.json"
     assert config.max_model_calls == 41
     assert config.max_tool_calls == 101
+
+
+def test_load_config_supports_mcp_auto_mode(tmp_path, monkeypatch):
+    monkeypatch.setenv("EASY_CLAW_MCP_ENABLED", "auto")
+
+    config = load_config(cwd=tmp_path)
+
+    assert config.mcp_enabled is False
+    assert config.mcp_mode == "auto"
 
 
 def test_load_config_defaults_base_url_to_deepseek(tmp_path, monkeypatch):

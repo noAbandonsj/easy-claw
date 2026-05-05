@@ -242,6 +242,25 @@ EASY_CLAW_BROWSER_HEADLESS=false
 
 ---
 
+## MCP 工具
+
+MCP 默认关闭，保证没有额外本地服务时也能稳定启动。需要持久记忆或外部工具时，复制并编辑配置：
+
+```powershell
+Copy-Item mcp_servers.json.example mcp_servers.json
+```
+
+推荐先使用 `auto` 模式：
+
+```env
+EASY_CLAW_MCP_ENABLED=auto
+EASY_CLAW_MCP_CONFIG=mcp_servers.json
+```
+
+`auto` 只会在配置文件存在且 server 可用时加载 MCP 工具；配置缺失会跳过，单个 server 启动失败会警告并继续加载其他 server。若希望显式启用并在配置错误时快速失败，设置 `EASY_CLAW_MCP_ENABLED=true`。
+
+---
+
 ## 设计原则
 
 - **Windows first**：安装、启动和脚本优先为 Windows 用户设计。

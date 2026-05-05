@@ -253,14 +253,29 @@ def test_dev_tools_python_prints_output(tmp_path, monkeypatch):
 
 
 def test_startup_banner_shows_mcp_status(tmp_path, monkeypatch):
-    from easy_claw.cli import _count_mcp_servers
+    from easy_claw.cli import _count_mcp_servers, _mcp_status
+    from easy_claw.config import AppConfig
 
     assert _count_mcp_servers("nonexistent.json") == 0
 
     valid = tmp_path / "servers.json"
-    valid.write_text('{"srv1": {}, "srv2": {}}')
+    valid.write_text('{"_comment": "metadata", "srv1": {}, "srv2": {}}')
     assert _count_mcp_servers(str(valid)) == 2
 
     empty = tmp_path / "empty.json"
     empty.write_text("[]")
     assert _count_mcp_servers(str(empty)) == 0
+
+    config = AppConfig(
+        cwd=tmp_path,
+        data_dir=tmp_path / "data",
+        product_db_path=tmp_path / "data" / "easy-claw.db",
+        checkpoint_db_path=tmp_path / "data" / "checkpoints.sqlite",
+        default_workspace=tmp_path,
+        model="test-model",
+        base_url="https://api.example.com",
+        api_key="sk-test",
+        mcp_mode="auto",
+        mcp_config_path=str(valid),
+    )
+    assert _mcp_status(config) == "auto (2 servers)"

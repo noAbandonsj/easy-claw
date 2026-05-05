@@ -2,7 +2,8 @@
     "_comment": "MCP server configurations for easy-claw. Copy to mcp_servers.json and edit.",
     "basic-memory": {
         "command": "uvx",
-        "args": ["basic-memory", "mcp"]
+        "args": ["basic-memory", "mcp"],
+        "transport": "stdio"
     },
     "filesystem": {
         "command": "npx",

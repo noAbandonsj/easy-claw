@@ -28,7 +28,7 @@ def build_easy_claw_tools(context: ToolContext) -> ToolBundle:
     interrupt_on.update(browser_bundle.interrupt_on)
 
     mcp_bundle = build_mcp_tools(
-        enabled=context.mcp_enabled,
+        enabled=context.mcp_mode if context.mcp_mode is not None else context.mcp_enabled,
         config_path=context.mcp_config_path,
     )
     tools.extend(mcp_bundle.tools)

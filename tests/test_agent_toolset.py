@@ -101,3 +101,31 @@ def test_build_easy_claw_tools_adds_mcp_tools_and_cleanup(tmp_path, monkeypatch)
     bundle.close()
 
     assert closed == ["mcp"]
+
+
+def test_build_easy_claw_tools_passes_mcp_auto_mode(tmp_path, monkeypatch):
+    def fake_build_mcp_tools(*, enabled, config_path):
+        assert enabled == "auto"
+        assert config_path == "mcp_servers.json"
+        return type(
+            "FakeToolBundle",
+            (),
+            {
+                "tools": [],
+                "cleanup": (),
+                "interrupt_on": {},
+            },
+        )()
+
+    monkeypatch.setattr("easy_claw.agent.toolset.build_mcp_tools", fake_build_mcp_tools)
+
+    build_easy_claw_tools(
+        ToolContext(
+            workspace_path=tmp_path,
+            cwd=tmp_path,
+            browser_enabled=False,
+            browser_headless=False,
+            mcp_mode="auto",
+            mcp_config_path="mcp_servers.json",
+        )
+    )

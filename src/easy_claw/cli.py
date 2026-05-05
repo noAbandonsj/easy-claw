@@ -22,7 +22,7 @@ from easy_claw.agent.runtime import (
     FakeAgentRuntime,
     StreamEvent,
 )
-from easy_claw.config import load_config
+from easy_claw.config import AppConfig, load_config
 from easy_claw.skills import discover_skill_sources, discover_skills
 from easy_claw.storage.db import initialize_product_db
 from easy_claw.storage.repositories import AuditRepository, SessionRecord, SessionRepository
@@ -80,6 +80,7 @@ def doctor() -> None:
     console.print(f"browser_enabled: {config.browser_enabled}")
     console.print(f"browser_headless: {config.browser_headless}")
     console.print(f"mcp_enabled: {config.mcp_enabled}")
+    console.print(f"mcp_mode: {config.mcp_mode}")
     console.print(f"mcp_config_path: {config.mcp_config_path}")
     console.print(f"max_model_calls: {config.max_model_calls}")
     console.print(f"max_tool_calls: {config.max_tool_calls}")
@@ -727,10 +728,25 @@ def _count_mcp_servers(config_path: str) -> int:
     try:
         data = json.loads(Path(config_path).read_text(encoding="utf-8"))
         if isinstance(data, dict):
-            return len(data)
+            return sum(
+                1
+                for name, server_config in data.items()
+                if not name.startswith("_") and isinstance(server_config, dict)
+            )
     except Exception:
         pass
     return 0
+
+
+def _mcp_status(config: AppConfig) -> str:
+    mode = getattr(config, "mcp_mode", "enabled" if config.mcp_enabled else "disabled")
+    if mode == "auto":
+        count = _count_mcp_servers(config.mcp_config_path)
+        return f"auto ({count} servers)" if count else "auto"
+    if mode == "enabled" or config.mcp_enabled:
+        count = _count_mcp_servers(config.mcp_config_path)
+        return f"enabled ({count} servers)" if count else "enabled"
+    return "disabled"
 
 
 def _render_startup_banner(config: AppConfig) -> None:  # noqa: F821
@@ -748,11 +764,7 @@ def _render_startup_banner(config: AppConfig) -> None:  # noqa: F821
         f"[{color}]{config.approval_mode}[/]",
     )
     grid.add_row("Browser:", "enabled" if config.browser_enabled else "disabled")
-    mcp_status = "disabled"
-    if config.mcp_enabled:
-        count = _count_mcp_servers(config.mcp_config_path)
-        mcp_status = f"enabled ({count} servers)" if count else "enabled"
-    grid.add_row("MCP tools:", mcp_status)
+    grid.add_row("MCP tools:", _mcp_status(config))
 
     banner = Panel(
         grid,

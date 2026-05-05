@@ -11,6 +11,15 @@ class TestBuildMcpToolsDisabled:
         assert bundle.cleanup == ()
         assert bundle.interrupt_on == {}
 
+    def test_auto_returns_empty_bundle_when_config_file_is_missing(self, tmp_path):
+        missing = str(tmp_path / "nonexistent.json")
+
+        bundle = build_mcp_tools(enabled="auto", config_path=missing)
+
+        assert bundle.tools == []
+        assert bundle.cleanup == ()
+        assert bundle.interrupt_on == {}
+
 
 class TestBuildMcpToolsConfigErrors:
     def test_raises_when_config_file_not_found(self, tmp_path):
@@ -43,8 +52,49 @@ class TestBuildMcpToolsConfigErrors:
         with pytest.raises(ToolExecutionError, match="non-empty JSON object"):
             build_mcp_tools(enabled=True, config_path=str(config_file))
 
+    def test_auto_warns_and_returns_empty_for_invalid_json(self, tmp_path):
+        config_file = tmp_path / "bad.json"
+        config_file.write_text("not json")
+
+        with pytest.warns(RuntimeWarning, match="MCP auto mode disabled"):
+            bundle = build_mcp_tools(enabled="auto", config_path=str(config_file))
+
+        assert bundle.tools == []
+        assert bundle.cleanup == ()
+        assert bundle.interrupt_on == {}
+
 
 class TestBuildMcpToolsSuccess:
+    def test_ignores_metadata_keys_in_server_config(self, tmp_path, monkeypatch):
+        config_file = tmp_path / "servers.json"
+        config_file.write_text(
+            '{"_comment": "copy and edit", "srv": {"command": "echo", '
+            '"args": ["hi"], "transport": "stdio"}}'
+        )
+
+        class FakeClient:
+            def __init__(self, config):
+                assert config == {
+                    "srv": {
+                        "command": "echo",
+                        "args": ["hi"],
+                        "transport": "stdio",
+                    }
+                }
+
+            async def get_tools(self):
+                return []
+
+        monkeypatch.setattr(
+            "easy_claw.tools.mcp.MultiServerMCPClient",
+            FakeClient,
+            raising=False,
+        )
+
+        bundle = build_mcp_tools(enabled=True, config_path=str(config_file))
+
+        assert bundle.tools == []
+
     def test_creates_client_and_returns_tools_and_cleanup(self, tmp_path, monkeypatch):
         config_file = tmp_path / "servers.json"
         config_file.write_text('{"srv": {"command": "echo", "args": ["hi"], "transport": "stdio"}}')
@@ -109,3 +159,62 @@ class TestBuildMcpToolsSuccess:
         bundle = build_mcp_tools(enabled=True, config_path=str(config_file))
         # Should not raise
         bundle.close()
+
+    def test_enabled_wraps_client_loading_errors(self, tmp_path, monkeypatch):
+        config_file = tmp_path / "servers.json"
+        config_file.write_text('{"srv": {"command": "echo", "args": ["hi"], "transport": "stdio"}}')
+
+        class FakeClient:
+            def __init__(self, config):
+                pass
+
+            async def get_tools(self):
+                raise ValueError("server failed")
+
+        monkeypatch.setattr(
+            "easy_claw.tools.mcp.MultiServerMCPClient",
+            FakeClient,
+            raising=False,
+        )
+
+        with pytest.raises(ToolExecutionError, match="Failed to load MCP tools"):
+            build_mcp_tools(enabled=True, config_path=str(config_file))
+
+    def test_auto_skips_failed_servers_and_keeps_working_tools(self, tmp_path, monkeypatch):
+        config_file = tmp_path / "servers.json"
+        config_file.write_text(
+            '{"bad": {"command": "bad", "args": [], "transport": "stdio"}, '
+            '"good": {"command": "good", "args": [], "transport": "stdio"}}'
+        )
+
+        class FakeTool:
+            def __init__(self, name):
+                self.name = name
+
+        good_tool = FakeTool("good_tool")
+
+        class FakeClient:
+            def __init__(self, config):
+                self.config = config
+
+            async def get_tools(self, *, server_name=None):
+                if server_name == "bad":
+                    raise ValueError("bad failed")
+                if server_name == "good":
+                    return [good_tool]
+                raise AssertionError("auto mode should load servers individually")
+
+            async def close(self):
+                pass
+
+        monkeypatch.setattr(
+            "easy_claw.tools.mcp.MultiServerMCPClient",
+            FakeClient,
+            raising=False,
+        )
+
+        with pytest.warns(RuntimeWarning, match="bad"):
+            bundle = build_mcp_tools(enabled="auto", config_path=str(config_file))
+
+        assert bundle.tools == [good_tool]
+        assert bundle.interrupt_on == {"good_tool": True}

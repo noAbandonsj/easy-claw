@@ -15,6 +15,7 @@ class ToolContext:
     browser_enabled: bool = False
     browser_headless: bool = False
     mcp_enabled: bool = False
+    mcp_mode: str | None = None
     mcp_config_path: str = "mcp_servers.json"
 
 
