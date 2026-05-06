@@ -33,19 +33,19 @@ class TestBuildMcpToolsDisabled:
 class TestBuildMcpToolsConfigErrors:
     def test_raises_when_config_file_not_found(self, tmp_path):
         missing = str(tmp_path / "nonexistent.json")
-        with pytest.raises(ToolExecutionError, match="MCP config file not found"):
+        with pytest.raises(ToolExecutionError, match="未找到 MCP 配置文件"):
             build_mcp_tools(enabled=True, config_path=missing)
 
     def test_raises_when_config_file_is_invalid_json(self, tmp_path):
         bad_json = tmp_path / "bad.json"
         bad_json.write_text("not json")
-        with pytest.raises(ToolExecutionError, match="Invalid JSON"):
+        with pytest.raises(ToolExecutionError, match="JSON 无效"):
             build_mcp_tools(enabled=True, config_path=str(bad_json))
 
     def test_raises_when_config_file_is_empty_object(self, tmp_path):
         empty = tmp_path / "empty.json"
         empty.write_text("{}")
-        with pytest.raises(ToolExecutionError, match="non-empty JSON object"):
+        with pytest.raises(ToolExecutionError, match="非空 JSON 对象"):
             build_mcp_tools(enabled=True, config_path=str(empty))
 
     def test_raises_when_dependency_not_installed(self, tmp_path, monkeypatch):
@@ -58,14 +58,14 @@ class TestBuildMcpToolsConfigErrors:
     def test_raises_when_config_is_array_not_object(self, tmp_path):
         config_file = tmp_path / "array.json"
         config_file.write_text("[1, 2, 3]")
-        with pytest.raises(ToolExecutionError, match="non-empty JSON object"):
+        with pytest.raises(ToolExecutionError, match="非空 JSON 对象"):
             build_mcp_tools(enabled=True, config_path=str(config_file))
 
     def test_auto_warns_and_returns_empty_for_invalid_json(self, tmp_path):
         config_file = tmp_path / "bad.json"
         config_file.write_text("not json")
 
-        with pytest.warns(RuntimeWarning, match="MCP auto mode disabled"):
+        with pytest.warns(RuntimeWarning, match="MCP auto 模式已关闭"):
             bundle = build_mcp_tools(enabled="auto", config_path=str(config_file))
 
         assert bundle.tools == []
@@ -186,7 +186,7 @@ class TestBuildMcpToolsSuccess:
             raising=False,
         )
 
-        with pytest.raises(ToolExecutionError, match="Failed to load MCP tools"):
+        with pytest.raises(ToolExecutionError, match="加载 MCP 工具失败"):
             build_mcp_tools(enabled=True, config_path=str(config_file))
 
     def test_auto_skips_failed_servers_and_keeps_working_tools(self, tmp_path, monkeypatch):

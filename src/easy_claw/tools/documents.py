@@ -79,7 +79,7 @@ def read_workspace_document(
             requested_path,
             converter=converter,
         )
-    raise ToolExecutionError(f"Unsupported document type: {requested_path}")
+    raise ToolExecutionError(f"不支持的文档类型：{requested_path}")
 
 
 def _create_markitdown_converter() -> object:

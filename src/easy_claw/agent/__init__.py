@@ -1,1 +1,1 @@
-"""Agent runtime adapters."""
+"""Agent 运行时适配器。"""

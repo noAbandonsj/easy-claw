@@ -26,7 +26,7 @@ _STATIC_DIR = Path(__file__).resolve().parent / "static"
 class CreateSessionRequest(BaseModel):
     workspace_path: str | None = None
     model: str | None = None
-    title: str = "New Session"
+    title: str = "新会话"
 
 
 def _event_to_dict(event: StreamEvent) -> dict[str, object]:
@@ -88,7 +88,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         session = repo.get_session(session_id)
         if session is not None:
             return session.__dict__
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="未找到会话")
 
     @app.websocket("/ws/chat")
     async def ws_chat(websocket: WebSocket) -> None:
@@ -101,7 +101,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         session = session_repo.create_session(
             workspace_path=str(config.default_workspace),
             model=config.model,
-            title="Web Chat",
+            title="网页聊天",
         )
 
         skill_sources = discover_skill_sources(config.cwd / "skills", config.default_workspace)
@@ -132,10 +132,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 if not text.strip():
                     continue
 
-                # Run the synchronous stream iterator in a thread so the
-                # asyncio event loop is not blocked while waiting for LLM
-                # tokens.  Events are forwarded to the WebSocket as they
-                # arrive.
+                # 同步流迭代器放到线程里运行，避免等待模型 token 时阻塞
+                # asyncio 事件循环。事件产出后再转发给 WebSocket。
                 loop = asyncio.get_running_loop()
                 stream_iter = agent_session.stream(text)
                 while True:

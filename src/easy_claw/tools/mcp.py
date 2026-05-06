@@ -14,11 +14,10 @@ except ImportError:  # pragma: no cover
 
 
 def build_mcp_tools(*, enabled: bool | str, config_path: str) -> ToolBundle:
-    """Build MCP tools from a JSON configuration file.
+    """从 JSON 配置文件构建 MCP 工具。
 
-    Returns an empty ToolBundle when disabled. When enabled, reads the
-    server config JSON, connects to all configured MCP servers, and
-    returns the discovered tools plus a cleanup callback.
+    关闭时返回空 ToolBundle。启用时读取服务配置，连接 MCP 服务，
+    并返回发现到的工具和清理回调。
     """
     mode = _mcp_mode(enabled)
     if mode == "disabled":
@@ -26,17 +25,17 @@ def build_mcp_tools(*, enabled: bool | str, config_path: str) -> ToolBundle:
 
     if MultiServerMCPClient is None:
         if mode == "auto":
-            _warn_auto_disabled("langchain-mcp-adapters is not installed")
+            _warn_auto_disabled("未安装 langchain-mcp-adapters")
             return ToolBundle()
-        raise ToolExecutionError("MCP tools require langchain-mcp-adapters. Run: uv sync")
+        raise ToolExecutionError("MCP 工具需要 langchain-mcp-adapters。请运行：uv sync")
 
     config_file = Path(config_path)
     if not config_file.exists():
         if mode == "auto":
             return ToolBundle()
         raise ToolExecutionError(
-            f"MCP config file not found: {config_file}. "
-            "Create an mcp_servers.json file or set EASY_CLAW_MCP_CONFIG."
+            f"未找到 MCP 配置文件：{config_file}。"
+            "请创建 mcp_servers.json，或设置 EASY_CLAW_MCP_CONFIG。"
         )
 
     servers_config = _read_servers_config(config_file, auto_mode=mode == "auto")
@@ -53,13 +52,13 @@ def build_mcp_tools(*, enabled: bool | str, config_path: str) -> ToolBundle:
         )
     except Exception as exc:
         if mode == "auto":
-            _warn_auto_disabled(f"failed to load tools from {config_file}: {exc}")
+            _warn_auto_disabled(f"无法从 {config_file} 加载工具：{exc}")
             return ToolBundle()
-        raise ToolExecutionError(f"Failed to load MCP tools from '{config_file}': {exc}") from exc
+        raise ToolExecutionError(f"从 '{config_file}' 加载 MCP 工具失败：{exc}") from exc
 
     for server_name, error in errors.items():
         warnings.warn(
-            f"MCP auto mode skipped server '{server_name}': {error}",
+            f"MCP auto 模式已跳过服务 '{server_name}'：{error}",
             RuntimeWarning,
             stacklevel=2,
         )
@@ -92,17 +91,16 @@ def _read_servers_config(config_file: Path, *, auto_mode: bool) -> dict[str, dic
         raw_config = json.loads(config_file.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         if auto_mode:
-            _warn_auto_disabled(f"invalid JSON in {config_file}: {exc}")
+            _warn_auto_disabled(f"{config_file} 中的 JSON 无效：{exc}")
             return {}
-        raise ToolExecutionError(f"Invalid JSON in MCP config file '{config_file}': {exc}") from exc
+        raise ToolExecutionError(f"MCP 配置文件 '{config_file}' 中的 JSON 无效：{exc}") from exc
 
     if not isinstance(raw_config, dict) or not raw_config:
         if auto_mode:
-            _warn_auto_disabled(f"{config_file} does not contain any server configs")
+            _warn_auto_disabled(f"{config_file} 没有包含任何服务配置")
             return {}
         raise ToolExecutionError(
-            f"MCP config file '{config_file}' must contain a non-empty "
-            "JSON object mapping server names to server configs."
+            f"MCP 配置文件 '{config_file}' 必须是非空 JSON 对象，并以服务名映射到服务配置。"
         )
 
     servers_config: dict[str, dict] = {}
@@ -112,23 +110,22 @@ def _read_servers_config(config_file: Path, *, auto_mode: bool) -> dict[str, dic
         if not isinstance(server_config, dict):
             if auto_mode:
                 warnings.warn(
-                    f"MCP auto mode skipped server '{name}': config must be an object",
+                    f"MCP auto 模式已跳过服务 '{name}'：配置必须是对象",
                     RuntimeWarning,
                     stacklevel=2,
                 )
                 continue
             raise ToolExecutionError(
-                f"MCP server '{name}' in '{config_file}' must be a JSON object."
+                f"MCP 配置文件 '{config_file}' 中的服务 '{name}' 必须是 JSON 对象。"
             )
         servers_config[name] = server_config
 
     if not servers_config:
         if auto_mode:
-            _warn_auto_disabled(f"{config_file} does not contain any server configs")
+            _warn_auto_disabled(f"{config_file} 没有包含任何服务配置")
             return {}
         raise ToolExecutionError(
-            f"MCP config file '{config_file}' must contain a non-empty "
-            "JSON object mapping server names to server configs."
+            f"MCP 配置文件 '{config_file}' 必须是非空 JSON 对象，并以服务名映射到服务配置。"
         )
 
     return servers_config
@@ -136,7 +133,7 @@ def _read_servers_config(config_file: Path, *, auto_mode: bool) -> dict[str, dic
 
 def _warn_auto_disabled(reason: str) -> None:
     warnings.warn(
-        f"MCP auto mode disabled: {reason}",
+        f"MCP auto 模式已关闭：{reason}",
         RuntimeWarning,
         stacklevel=2,
     )

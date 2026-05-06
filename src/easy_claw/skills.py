@@ -54,7 +54,7 @@ def discover_skills(skills_root: Path) -> list[Skill]:
 
 
 def discover_skill_sources(skills_root: Path, workspace_root: Path) -> list[str]:
-    """Return DeepAgents skill source directories as virtual backend paths."""
+    """返回 DeepAgents 可读取的技能源目录路径。"""
     workspace = workspace_root.resolve()
     source_dirs: set[Path] = set()
     for skill in discover_skills(skills_root):

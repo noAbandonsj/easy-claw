@@ -13,6 +13,7 @@ tmp/
 .env
 .env.*
 !.env.example
+mcp_servers.json
 
 # Frontend artifacts
 node_modules/

@@ -40,7 +40,7 @@ class SessionRepository:
         *,
         workspace_path: str,
         model: str | None,
-        title: str = "New Session",
+        title: str = "新会话",
     ) -> SessionRecord:
         timestamp = _now()
         record = SessionRecord(

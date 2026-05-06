@@ -1,1 +1,1 @@
-"""Product storage for easy-claw metadata."""
+"""easy-claw 元数据的本地存储。"""

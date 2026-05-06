@@ -1,1 +1,1 @@
-"""Local tool helpers for easy-claw."""
+"""easy-claw 本地工具辅助函数。"""

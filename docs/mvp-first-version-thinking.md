@@ -111,7 +111,7 @@ easy-claw 仍然可以被定位为“个人 AI Agent 工作台”，但第一版
 
 ## 推荐工程切片
 
-### Phase 0: 文档和工程骨架
+### 阶段 0：文档和工程骨架
 
 - 明确 README 和 architecture 的 MVP 口径。
 - 创建 `pyproject.toml`。
@@ -119,7 +119,7 @@ easy-claw 仍然可以被定位为“个人 AI Agent 工作台”，但第一版
 - 创建 `scripts/start.ps1`。
 - 确定基础配置格式和数据库位置。
 
-### Phase 1: 最小可运行 Agent
+### 阶段 1：最小可运行 Agent
 
 - FastAPI `GET /health`。
 - Typer CLI 入口。
@@ -129,7 +129,7 @@ easy-claw 仍然可以被定位为“个人 AI Agent 工作台”，但第一版
 - 一个最小对话命令。
 - 会话和消息落库。
 
-### Phase 2: 本地文档助手
+### 阶段 2：本地文档助手
 
 - 工作区路径配置。
 - FileManagementToolkit 受限接入。
@@ -137,7 +137,7 @@ easy-claw 仍然可以被定位为“个人 AI Agent 工作台”，但第一版
 - Markdown 报告输出。
 - 工具调用记录。
 
-### Phase 3: 开发者工具增强
+### 阶段 3：开发者工具增强
 
 - Markdown Skills Loader。
 - DuckDuckGo / Tavily 搜索。
@@ -145,7 +145,7 @@ easy-claw 仍然可以被定位为“个人 AI Agent 工作台”，但第一版
 - 开发者模式 ShellTool。
 - 开发者模式 Python REPL。
 
-### Phase 4: 安全和可用性增强
+### 阶段 4：安全和可用性增强
 
 - 基础风险标签。
 - 高风险工具调用提示。
@@ -153,7 +153,7 @@ easy-claw 仍然可以被定位为“个人 AI Agent 工作台”，但第一版
 - 更清晰的工作区边界。
 - 后续再考虑 Approval Policy 和 Docker 沙箱。
 
-### Phase 5: 普通用户体验
+### 阶段 5：普通用户体验
 
 - 轻量 Web UI。
 - 更友好的配置向导。

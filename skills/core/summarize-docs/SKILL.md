@@ -1,12 +1,12 @@
 ---
 name: summarize-docs
-description: Summarize selected local documents into a concise Markdown report.
+description: 将选中的本地文档总结为简洁的 Markdown 报告。
 ---
 
-# Skill
+# 技能
 
-1. Read only user-selected files inside the workspace.
-2. Convert supported document formats to Markdown before summarizing.
-3. Preserve source filenames in the answer.
-4. Separate facts, decisions, open questions, and suggested next steps.
-5. Ask before writing a report file.
+1. 只读取用户在工作区内选中的文件。
+2. 对支持的文档格式，先转换为 Markdown 再总结。
+3. 在回答中保留来源文件名。
+4. 分开列出事实、决策、未决问题和建议的下一步。
+5. 写入报告文件前先询问用户。

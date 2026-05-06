@@ -1,4 +1,4 @@
-# easy-claw Architecture
+# easy-claw 架构设计
 
 本文档给出 easy-claw 的工程化落地设计。目标是先做一个个人开发者能实现、Windows 用户能安装、功能边界清晰的本地 AI 助手，而不是一开始构建复杂平台。
 
@@ -8,7 +8,7 @@ easy-claw 的第一性目标是“个人助手体验”：
 
 - 用户不需要理解 Agent 框架、MCP 协议、向量数据库或容器沙箱。
 - 用户只需要选择工作区、描述任务、查看计划、确认高风险操作。
-- 系统把复杂能力藏在 Core 和 Adapter 里，对外呈现为任务、记忆、技能和工具。
+- 系统把复杂能力藏在核心服务和适配器里，对外呈现为任务、记忆、技能和工具。
 
 推荐首屏不是管理后台，而是工作台：
 
@@ -22,87 +22,87 @@ CLI 作为开发者入口，Web UI 作为普通用户入口，桌面端放到后
 
 ```mermaid
 flowchart TB
-    subgraph Entry["User Entry"]
-        Web["Local Web UI"]
+    subgraph Entry["用户入口"]
+        Web["本地 Web UI"]
         CLI["CLI"]
-        Desktop["Desktop later"]
+        Desktop["桌面端（后续）"]
     end
 
-    subgraph Core["FastAPI Core"]
+    subgraph Core["FastAPI 核心"]
         API["HTTP / SSE / WebSocket API"]
-        Session["Session Manager"]
-        Config["Config Manager"]
-        Events["Event Bus"]
-        Policy["Approval Policy Engine"]
+        Session["会话管理"]
+        Config["配置管理"]
+        Events["事件总线"]
+        Policy["审批策略引擎"]
     end
 
-    subgraph Runtime["Agent Runtime"]
-        Agent["AgentRuntime Interface"]
+    subgraph Runtime["Agent 运行时"]
+        Agent["AgentRuntime 接口"]
         LC["LangChainAgentRuntime"]
-        LG["LangGraphRuntime later"]
+        LG["LangGraphRuntime（后续）"]
     end
 
-    subgraph Capabilities["Capabilities"]
-        Skills["Markdown Skills"]
-        Tools["Tool Registry"]
-        MCP["MCP Client Adapter"]
-        Memory["Memory Provider"]
-        Sandbox["Sandbox Runner optional"]
+    subgraph Capabilities["能力层"]
+        Skills["Markdown 技能"]
+        Tools["工具注册表"]
+        MCP["MCP 客户端适配器"]
+        Memory["记忆提供方"]
+        Sandbox["沙箱执行器（可选）"]
     end
 
-    subgraph Storage["Local Storage"]
+    subgraph Storage["本地存储"]
         SQLite["SQLite"]
-        Files["Workspace Files"]
-        Logs["Audit Logs"]
+        Files["工作区文件"]
+        Logs["审计日志"]
     end
 
     Web --> API
     CLI --> API
-    Desktop -. later .-> API
+    Desktop -. 后续 .-> API
     API --> Session
     API --> Events
     Session --> Agent
     Agent --> LC
-    Agent -. later .-> LG
+    Agent -. 后续 .-> LG
     Agent --> Skills
     Agent --> Tools
     Agent --> Memory
     Tools --> MCP
     Tools --> Policy
-    Policy -. optional .-> Sandbox
+    Policy -. 可选 .-> Sandbox
     Core --> SQLite
     Memory --> SQLite
-    Sandbox -. optional .-> Files
+    Sandbox -. 可选 .-> Files
     Policy --> Logs
 ```
 
 ## 3. 模块设计
 
-### UI
+### 用户界面
 
 职责：
 
 - 提供对话入口。
 - 展示 Agent 计划、执行进度和工具调用。
 - 展示人工确认弹窗。
-- 选择工作区和可用 Skills。
+- 选择工作区和可用技能。
 - 管理记忆开关、工具权限和执行模式。
 
 MVP 可以只实现 CLI 或轻量 Web UI。更推荐 Web UI，因为普通个人用户更容易理解“待确认操作”“工具调用日志”和“记忆开关”。
 
-### Core
+### 核心服务
 
-Core 是本地服务，不做复杂平台化：
+核心服务是本地服务，不做复杂平台化：
 
 - FastAPI 提供本地 HTTP API。
 - SQLite 保存会话、消息、审批、工具调用、技能索引和记忆摘要。
-- 配置文件保存模型 Provider、默认工作区、启用的 MCP Server、执行确认策略。
-- Event Bus 用于把 Agent 流式输出、工具调用、确认请求推给 UI。
+- 配置文件保存模型提供方、默认工作区、启用的 MCP 服务和执行确认策略。
+- 事件总线用于把 Agent 流式输出、工具调用、确认请求推给 UI。
 - Python 依赖和运行入口由根目录 `pyproject.toml`、`uv.lock` 和 `uv run` 管理。
 
-Core 不应该直接写大量 Agent 逻辑，而是调用 `AgentRuntime` 接口。
+核心服务不应该直接写大量 Agent 逻辑，而是调用 `AgentRuntime` 接口。
 
-### Agent Runtime
+### Agent 运行时
 
 当前实现使用 `deepagents` SDK 作为 Agent 运行时，底层已是 LangGraph，同时通过 `AgentRuntime` 接口保持框架无关性。
 
@@ -134,20 +134,20 @@ class DeepAgentsRuntime:
 
 1. 通过 `langchain_openai.ChatOpenAI` 初始化 DeepSeek 模型（兼容 OpenAI API）
 2. 调用 `deepagents.create_deep_agent()` 创建 Agent，传入：
-   - `skills`：skill 源目录路径列表，由 deepagents SDK 原生处理 skill 发现和注入
+   - `skills`：技能源目录路径列表，由 deepagents SDK 原生处理技能发现和注入
    - `backend=LocalShellBackend(root_dir=..., virtual_mode=True)`：虚拟化文件系统 + 本地 shell 执行，将 Agent 的文件操作限制在 workspace 内
    - `checkpointer=SqliteSaver`：LangGraph SQLite checkpoint，用于对话状态持久化
    - `interrupt_on`：由 `EASY_CLAW_APPROVAL_MODE` 决定；默认 `permissive` 不打断，`balanced` / `strict` 对命令执行、Python 执行和文件写入触发 LangGraph interrupt
 3. 如触发 interrupt，通过 `ConsoleApprovalReviewer` 在控制台展示操作信息后请求用户 y/N 确认
 4. 返回 `AgentResult` 包含最后一条消息的文本内容
 
-`FakeAgentRuntime` 提供 dry-run 能力，不调用模型直接返回 echo 结果，用于测试和 smoke check。
+`FakeAgentRuntime` 提供 dry-run 能力，不调用模型直接返回回显结果，用于测试和冒烟检查。
 
 后期规划：
 - 引入 LangGraph 的流式输出和长任务恢复能力
-- 对 UI、Memory、Tools、Approval 保持 `AgentRuntime` 接口不变
+- 对 UI、记忆、工具和审批保持 `AgentRuntime` 接口不变
 
-### Memory
+### 记忆
 
 记忆不要一开始做复杂知识图谱。MVP 只需要解决三个问题：
 
@@ -180,25 +180,25 @@ class MemoryProvider:
 
 记忆必须可见、可编辑、可删除。Agent 不能偷偷记忆敏感信息。
 
-### Markdown Skills
+### Markdown 技能
 
-Skills 是 easy-claw 的“经验沉淀层”。它不是代码插件市场，而是普通用户和开发者都能读懂的 Markdown 工作流。
+技能是 easy-claw 的“经验沉淀层”。它不是代码插件市场，而是普通用户和开发者都能读懂的 Markdown 工作流。
 
 建议格式：
 
 ```markdown
 ---
 name: summarize-local-docs
-description: Summarize selected local documents into a Markdown report.
+description: 将选中的本地文档总结为 Markdown 报告。
 risk: read-only
 ---
 
 # Skill
 
-1. Ask the user to select documents.
-2. Read only selected files.
-3. Extract key points.
-4. Produce a report with sources.
+1. 让用户选择文档。
+2. 只读取用户选中的文件。
+3. 提取关键要点。
+4. 生成带来源的报告。
 ```
 
 目录：
@@ -213,44 +213,44 @@ skills/
     my-weekly-review.md
 ```
 
-Skills 的执行方式：
+技能的执行方式：
 
-- Skill Loader 解析 frontmatter。
+- 技能加载器解析 frontmatter 元数据。
 - Skill Registry 按名称、标签、执行确认级别索引。
-- Agent 在提示词里得到可用 Skills 摘要。
+- Agent 在提示词里得到可用技能摘要。
 - Skill 内容用于约束任务流程，不直接绕过执行确认。
 
-### Tools and MCP
+### 工具和 MCP
 
 MCP 是工具接入协议，不需要 easy-claw 自己发明工具协议。
 
-easy-claw 只实现 MCP Client Adapter：
+easy-claw 只实现 MCP 客户端适配器：
 
-- 发现 MCP Server。
-- 列出 tools、resources、prompts。
+- 发现 MCP 服务。
+- 列出工具、资源和提示词。
 - 把 MCP Tool 包装成 LangChain Tool。
-- 调用前交给 Approval Policy 做风险提示和确认判断。
+- 调用前交给审批策略做风险提示和确认判断。
 - 调用后记录审计日志。
 
-MCP 官方文档将 tools 设计为模型可自动发现和调用的能力，也强调用户应能拒绝工具调用，并在 UI 中清楚显示工具暴露和调用情况。easy-claw 应把这个建议产品化：
+MCP 官方文档将工具设计为模型可自动发现和调用的能力，也强调用户应能拒绝工具调用，并在 UI 中清楚显示工具暴露和调用情况。easy-claw 应把这个建议产品化：
 
 - UI 显示当前暴露给 Agent 的工具。
 - 工具调用有明显提示。
 - 写文件、执行命令、联网、上传、删除等操作必须确认。
 
-MCP Resources 和 Roots 的设计也适合 easy-claw：
+MCP 资源和根目录的设计也适合 easy-claw：
 
-- Resources 用于暴露文件、数据库 schema、网页等上下文。
-- Roots 用于限制文件系统边界。
-- 工作区选择器本质上就是 Roots 的用户界面。
+- 资源用于暴露文件、数据库 schema、网页等上下文。
+- 根目录用于限制文件系统边界。
+- 工作区选择器本质上就是根目录的用户界面。
 
-### Sandbox
+### 沙箱
 
 Docker Desktop 和 WSL2 对普通用户有安装门槛，所以它们不能成为 easy-claw 的默认依赖。Windows 下也不应该从零实现沙箱。推荐采用两种产品形态：
 
 | 形态 | 是否需要 Docker / WSL2 | 默认能力 | 风险策略 |
 | --- | --- | --- | --- |
-| 基础款 | 不需要 | 对话、文档总结、文件读写、Skills、SQLite 记忆；默认可直接执行本机命令和 Python | 明确提示“不在沙箱内”，记录审计日志；需要谨慎时切换到 `balanced` / `strict` |
+| 基础款 | 不需要 | 对话、文档总结、文件读写、技能、SQLite 记忆；默认可直接执行本机命令和 Python | 明确提示“不在沙箱内”，记录审计日志；需要谨慎时切换到 `balanced` / `strict` |
 | 沙箱款 | 需要 | 在 Docker 容器里执行命令 | 限制挂载、网络、CPU、内存、超时 |
 
 MVP 应优先完成基础款：
@@ -274,7 +274,7 @@ MVP 应优先完成基础款：
 
 Docker Desktop 的 WSL2 后端适合进阶 Windows 用户，因为 Docker 官方说明它允许 Windows 用户通过 WSL2 使用 Linux 工作空间，并减少维护 Windows / Linux 双套脚本的成本。但 WSL2 不是强隔离安全边界，所以 easy-claw 仍要保留路径限制、确认机制和审计日志。
 
-### Execution Approval
+### 执行确认
 
 执行确认通过 LangGraph 的 Human-in-the-Loop（HITL）机制实现，不自行构建审批引擎。默认模式偏可用性，谨慎模式再启用 HITL。
 
@@ -292,7 +292,7 @@ Docker Desktop 的 WSL2 后端适合进阶 Windows 用户，因为 Docker 官方
 ```python
 class ApprovalReviewer(Protocol):
     def review(self, interrupts: Sequence[object]) -> list[dict[str, object]]:
-        """Return LangGraph HITL decisions for interrupt payloads."""
+        """根据 interrupt payload 返回 LangGraph HITL 决策。"""
 ```
 
 后期规划：扩展 interrupt 覆盖范围（shell 命令执行、网络访问等高风险操作），并增加风险分级提示。
@@ -445,13 +445,13 @@ easy-claw/
 2. `GET /health` 和本地启动。
 3. SQLite 初始化。
 4. 创建会话和保存消息。
-5. 一个 LangChain Agent Runtime 封装。
+5. 一个 LangChain Agent 运行时封装。
 6. 一个只读文件总结工具。
-7. Skill Loader 加载 `skills/core/*.md`。
+7. 技能加载器加载 `skills/core/*.md`。
 8. 审批模式可配置：默认 `permissive` 保障可用性，`balanced` / `strict` 对命令执行和文件写入发起人工确认。
 9. 一个本机命令执行器，默认在工作区内直接运行，并明确显示“不在沙箱内”。
 10. SQLite 简化记忆，用于保存用户偏好、项目笔记和任务摘要。
-11. MCP Adapter 接口定义，真实 MCP Server 接入放到后续阶段。
+11. MCP 适配器接口定义，真实 MCP 服务接入放到后续阶段。
 12. CLI 或 Web UI 能发起任务并显示结果。
 
 不要第一轮就做：
@@ -467,18 +467,18 @@ easy-claw/
 
 | 能力 | 复用组件 | easy-claw 只做什么 |
 | --- | --- | --- |
-| Agent 编排 | deepagents (基于 LangChain/LangGraph) | 封装 `AgentRuntime`，注册工具和 Skills，提供 LocalShellBackend 虚拟工作区 |
+| Agent 编排 | deepagents (基于 LangChain/LangGraph) | 封装 `AgentRuntime`，注册工具和技能，提供 LocalShellBackend 虚拟工作区 |
 | 长任务恢复 | LangGraph | 后期封装 `LangGraphRuntime` |
-| 工具协议 | MCP | 实现 MCP Client Adapter 和权限 UI |
-| 长期记忆 | Mem0 / Honcho | 实现 Memory Provider 接口 |
-| 技能沉淀 | Markdown | Loader、Registry、Skill 选择器 |
+| 工具协议 | MCP | 实现 MCP 客户端适配器和权限 UI |
+| 长期记忆 | Mem0 / Honcho | 实现记忆提供方接口 |
+| 技能沉淀 | Markdown | 加载器、注册表、技能选择器 |
 | 包管理 | uv | 管理 `pyproject.toml`、`uv.lock`、`.venv` 和运行命令 |
 | 本地 API | FastAPI | 本地服务和事件流 |
 | 本地状态 | SQLite | 会话、审批、审计、记忆索引 |
-| 执行确认 | 本地 Approval Policy | 可配置 `permissive` / `balanced` / `strict`，记录审计，谨慎模式等待人工确认 |
+| 执行确认 | 本地审批策略 | 可配置 `permissive` / `balanced` / `strict`，记录审计，谨慎模式等待人工确认 |
 | 沙箱 | 可选 Docker Desktop + WSL2 | 仅在沙箱款中启动、挂载、限制、审计 |
 
-这个封装方式可以避免把第三方框架写死在业务逻辑里。后续替换模型、记忆服务或 Agent Runtime 时，UI 和 Core 不需要大改。
+这个封装方式可以避免把第三方框架写死在业务逻辑里。后续替换模型、记忆服务或 Agent 运行时时，UI 和核心服务不需要大改。
 
 ## 10. 路线图
 
@@ -502,7 +502,7 @@ easy-claw/
 
 ### v0.2: 本地文档助手与强工具可用性 (已完成)
 
-- 复用第一版已有的 DeepAgents Runtime 和 Skill Loader
+- 复用第一版已有的 DeepAgents 运行时和技能加载器
 - 工作区作为默认上下文，但允许用户显式传入本机路径
 - `LocalShellBackend(virtual_mode=True)` 提供虚拟化文件系统边界与本地 shell 执行
 - 文件选择、读取和路径解析
@@ -532,21 +532,21 @@ v0.2 的工具调用过程对用户是黑盒——Agent 调了什么工具、入
 
 ### v0.4: MCP 工具接入
 
-- 真实 MCP Client Adapter
+- 真实 MCP 客户端适配器
 - 工具列表 UI
 - 工具调用审计（复用 v0.3 的工具调用显示管道）
-- 文件系统 / GitHub / 搜索 MCP Server 示例
+- 文件系统 / GitHub / 搜索 MCP 服务示例
 
-### v0.5: Memory
+### v0.5: 记忆
 
-- 完善 MVP 的 SQLite Memory
+- 完善 MVP 的 SQLite 记忆
 - 用户偏好管理
 - 项目经验检索
 - 任务摘要沉淀
-- Mem0 Provider
-- Honcho Provider
+- Mem0 提供方
+- Honcho 提供方
 
-### v0.6: Optional Sandbox
+### v0.6: 可选沙箱
 
 - 可选 Docker Runner
 - 只读挂载和输出目录
@@ -569,14 +569,14 @@ v0.2 的工具调用过程对用户是黑盒——Agent 调了什么工具、入
 
 用于作品集或项目申请时，可以这样描述：
 
-easy-claw 是一个面向 Windows 个人用户的本地 AI Agent 工作台。项目通过 LangChain、MCP、长期记忆 Provider、Markdown Skills 和可选 Docker Desktop 沙箱，将成熟 Agent 生态封装成易安装、可确认、可审计、可扩展的个人助手系统。它重点解决普通用户在本地使用 Agent 时遇到的安装复杂、工具危险、记忆割裂、技能不可复用和 Windows 沙箱困难等问题。
+easy-claw 是一个面向 Windows 个人用户的本地 AI Agent 工作台。项目通过 LangChain、MCP、长期记忆提供方、Markdown 技能和可选 Docker Desktop 沙箱，将成熟 Agent 生态封装成易安装、可确认、可审计、可扩展的个人助手系统。它重点解决普通用户在本地使用 Agent 时遇到的安装复杂、工具危险、记忆割裂、技能不可复用和 Windows 沙箱困难等问题。
 
 技术亮点：
 
-- 基于 Adapter 的 Agent Runtime 设计，先接 LangChain，后续平滑升级 LangGraph。
+- 基于适配器的 Agent 运行时设计，先接 LangChain，后续平滑升级 LangGraph。
 - 以 MCP 作为工具接入边界，不自研工具协议。
-- 将 Markdown Skills 作为可读、可版本化、可复用的任务流程。
-- 设计本地优先的 Memory Provider，支持从 SQLite 过渡到 Mem0 / Honcho。
+- 将 Markdown 技能作为可读、可版本化、可复用的任务流程。
+- 设计本地优先的记忆提供方，支持从 SQLite 过渡到 Mem0 / Honcho。
 - 在 Windows 上用 `start.ps1` 降低基础部署门槛，并把 Docker Desktop / WSL2 设计为可选沙箱能力。
 - 把高风险操作前的人工确认和审计日志放进核心流程。
 

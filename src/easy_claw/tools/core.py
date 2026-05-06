@@ -20,16 +20,16 @@ CORE_INTERRUPT_ON = {
 def _format_command_result(result: CommandResult, *, label: str) -> str:
     parts: list[str] = []
     if result.timed_out:
-        parts.append(f"[WARNING] {label} timed out after 60 seconds.")
+        parts.append(f"[警告] {label} 已超过 60 秒超时。")
     if result.stdout:
         parts.append(result.stdout)
     if result.stderr:
         parts.append(f"[stderr]\n{result.stderr}")
     if result.truncated:
-        parts.append("[WARNING] Output was truncated (exceeded 20000 characters).")
+        parts.append("[警告] 输出已截断（超过 20000 个字符）。")
     if result.exit_code != 0 and not result.timed_out:
-        parts.append(f"[exit code: {result.exit_code}]")
-    return "\n".join(parts) if parts else "(no output)"
+        parts.append(f"[退出码：{result.exit_code}]")
+    return "\n".join(parts) if parts else "（无输出）"
 
 
 def build_core_tool_bundle(*, workspace_path: Path, cwd: Path) -> ToolBundle:
@@ -40,68 +40,61 @@ def build_core_tool_bundle(*, workspace_path: Path, cwd: Path) -> ToolBundle:
 
 
 def build_core_tools(*, workspace_path: Path, cwd: Path) -> list[object]:
-    """Return LangChain tools configured for the active workspace."""
+    """返回已绑定当前工作区的 LangChain 工具。"""
 
     @tool
     def search_web(query: str) -> str:
-        """Search the web using DuckDuckGo and return results as formatted text.
+        """使用搜索后端联网搜索，并返回格式化文本。
 
-        Use this when you need up-to-date information that may not be in your
-        training data, or when the user asks you to look something up online.
-        Each result includes a title, URL, and snippet.
+        当用户需要最新信息，或明确要求联网查询时使用。
+        每条结果包含标题、网址和摘要。
         """
         results = _search_web(query)
         if not results:
-            return f"No results found for: {query}"
-        lines = [f"Search results for: {query}"]
+            return f"没有找到结果：{query}"
+        lines = [f"搜索结果：{query}"]
         for i, r in enumerate(results, 1):
             lines.append(f"\n{i}. {r.title}\n   URL: {r.url}\n   {r.snippet}")
         return "\n".join(lines)
 
     @tool
     def run_command(command: str) -> str:
-        """Execute a PowerShell command in the active workspace.
+        """在当前工作区执行 PowerShell 命令。
 
-        Use this proactively for common project work such as running tests,
-        linting, inspecting Git state, listing files, or invoking local build
-        commands. This is a local fallback runner, not a sandbox. Output is
-        captured and truncated at 20000 characters. Timeout is 60 seconds.
+        常用于运行测试、检查代码风格、查看 Git 状态、列文件和执行本地构建。
+        这是本地执行器，不是沙箱。输出最多保留 20000 个字符，超时时间为 60 秒。
         """
-        return _format_command_result(_run_command(command, cwd=cwd), label="Command")
+        return _format_command_result(_run_command(command, cwd=cwd), label="命令")
 
     @tool
     def run_python(code: str) -> str:
-        """Execute a Python code snippet in the active workspace.
+        """在当前工作区执行 Python 代码片段。
 
-        Use this proactively for temporary analysis, data processing, and
-        repository inspection tasks. The code is written to a temporary .py
-        file and executed with the system Python interpreter. Output is
-        captured and truncated at
-        20000 characters. Timeout is 60 seconds.
+        常用于临时分析、数据处理和项目检查。
+        代码会写入临时 .py 文件，并由系统 Python 解释器执行。
+        输出最多保留 20000 个字符，超时时间为 60 秒。
         """
-        return _format_command_result(_run_python_code(code, cwd=cwd), label="Python execution")
+        return _format_command_result(_run_python_code(code, cwd=cwd), label="Python 执行")
 
     @tool
     def read_document(path: str) -> str:
-        """Read a local document and return its content as markdown.
+        """读取本地文档，并以 Markdown 文本返回内容。
 
-        Supports text files (.md, .txt, .py, .json, .yaml, .yml) and
-        convertible formats (.pdf, .docx, .xlsx, .pptx, .csv, .html).
-        Non-text formats are automatically converted to markdown.
+        支持文本文件（.md、.txt、.py、.json、.yaml、.yml）和可转换格式
+        （.pdf、.docx、.xlsx、.pptx、.csv、.html）。
+        非文本格式会自动转换为 Markdown。
 
-        The path is relative to the workspace root. Use this to read
-        project files, documentation, or any supported document the
-        user wants you to analyze.
+        路径相对于工作区根目录。适合读取项目文件、说明文档或用户要求分析的文档。
         """
         try:
             document = _read_workspace_document(workspace_path, path)
         except Exception as exc:
-            return f"Failed to read document '{path}': {exc}"
-        prefix = f"Document: {document.relative_path}"
+            return f"读取文档失败 '{path}'：{exc}"
+        prefix = f"文档：{document.relative_path}"
         if document.converted:
-            prefix += " (converted to markdown)"
+            prefix += "（已转换为 Markdown）"
         if document.outside_workspace:
-            prefix += " [outside workspace]"
+            prefix += " [工作区外]"
         return f"{prefix}\n\n{document.markdown}"
 
     return [search_web, run_command, run_python, read_document]

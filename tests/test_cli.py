@@ -19,8 +19,8 @@ def test_doctor_command_reports_ok(tmp_path, monkeypatch):
 
     assert result.exit_code == 0
     assert "easy-claw doctor" in result.stdout
-    assert "mcp_enabled:" in result.stdout
-    assert "mcp_config_path:" in result.stdout
+    assert "MCP 启用状态:" in result.stdout
+    assert "MCP 配置文件:" in result.stdout
 
 
 def test_chat_dry_run_uses_fake_runtime():
@@ -29,7 +29,7 @@ def test_chat_dry_run_uses_fake_runtime():
     result = runner.invoke(app, ["chat", "--dry-run", "hello"])
 
     assert result.exit_code == 0
-    assert "easy-claw dry run: hello" in result.stdout
+    assert "easy-claw dry-run 测试：hello" in result.stdout
 
 
 def test_chat_without_model_reports_configuration_error(tmp_path, monkeypatch):
@@ -40,7 +40,7 @@ def test_chat_without_model_reports_configuration_error(tmp_path, monkeypatch):
     result = runner.invoke(app, ["chat", "hello"])
 
     assert result.exit_code != 0
-    assert "Set EASY_CLAW_MODEL" in result.stdout
+    assert "请先设置 EASY_CLAW_MODEL" in result.stdout
 
 
 def test_chat_interactive_reuses_one_session_thread(tmp_path, monkeypatch):
@@ -105,9 +105,9 @@ def test_render_streaming_turn_prints_tokens_and_tool_panels(monkeypatch):
     rendered = output.getvalue()
     assert "hello " in rendered
     assert "world" in rendered
-    assert "Tool call: read_document" in rendered
+    assert "工具调用：read_document" in rendered
     assert "README.md" in rendered
-    assert "Tool result: read_document" in rendered
+    assert "工具结果：read_document" in rendered
     assert "# Project" in rendered
 
 
@@ -278,4 +278,4 @@ def test_startup_banner_shows_mcp_status(tmp_path, monkeypatch):
         mcp_mode="auto",
         mcp_config_path=str(valid),
     )
-    assert _mcp_status(config) == "auto (2 servers)"
+    assert _mcp_status(config) == "auto（2 个服务）"

@@ -1,12 +1,12 @@
 ---
 name: analyze-project
-description: Analyze a local project structure and summarize architecture, commands, and risks.
+description: 分析本地项目结构，并总结架构、命令和风险。
 ---
 
-# Skill
+# 技能
 
-1. Use only files inside the selected workspace.
-2. Inspect README, docs, project config, and source directories before drawing conclusions.
-3. Summarize architecture, entry points, dependencies, tests, and likely next steps.
-4. Cite the local paths that support each important claim.
-5. Ask before running commands or writing files.
+1. 只使用所选工作区内的文件。
+2. 先检查 README、docs、项目配置和源码目录，再给出结论。
+3. 总结架构、入口、依赖、测试和可能的下一步。
+4. 重要判断需要引用对应的本地路径。
+5. 运行命令或写文件前先询问用户。

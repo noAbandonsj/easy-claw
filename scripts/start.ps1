@@ -5,6 +5,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$env:PYTHONIOENCODING = "utf-8"
 
 function Test-Command {
     param([string]$Name)
@@ -12,25 +15,25 @@ function Test-Command {
 }
 
 if (-not (Test-Command "uv")) {
-    Write-Error "uv is required. Install it from https://docs.astral.sh/uv/getting-started/installation/"
+    Write-Error "缺少 uv。请先安装 uv：https://docs.astral.sh/uv/getting-started/installation/"
 }
 
-Write-Host "Syncing dependencies..."
+Write-Host "正在同步依赖..."
 uv sync
 
-Write-Host "Initializing local database..."
+Write-Host "正在初始化本地数据库..."
 uv run easy-claw init-db
 
 if ($ApiServer) {
-    Write-Host "Starting easy-claw API at http://$HostAddress`:$Port"
-    uv run easy-claw serve --host $HostAddress --port $Port
-    Write-Host ""
-    Write-Host "API is running. Swagger docs at http://$HostAddress`:$Port/docs"
-    Write-Host "To start the interactive AI assistant, run:"
+    Write-Host "正在启动 easy-claw API：http://$HostAddress`:$Port"
+    Write-Host "接口文档：http://$HostAddress`:$Port/docs"
+    Write-Host "本地聊天页面：http://$HostAddress`:$Port/"
+    Write-Host "如需改用交互式 AI 助手，请运行："
     Write-Host "  uv run easy-claw chat --interactive"
+    uv run easy-claw serve --host $HostAddress --port $Port
 }
 else {
     Write-Host ""
-    Write-Host "Starting easy-claw interactive chat..."
+    Write-Host "正在启动 easy-claw 交互式聊天..."
     uv run easy-claw chat --interactive
 }

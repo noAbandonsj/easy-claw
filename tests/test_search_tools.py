@@ -10,7 +10,7 @@ from easy_claw.tools.search import (
 )
 
 # ---------------------------------------------------------------------------
-# Existing tests (adapted to keyword-only max_results)
+# 既有测试（适配 keyword-only max_results）
 # ---------------------------------------------------------------------------
 
 
@@ -35,7 +35,7 @@ class FailingSearchBackend:
 
 
 def test_search_web_wraps_backend_errors():
-    with pytest.raises(ToolExecutionError, match="Search failed"):
+    with pytest.raises(ToolExecutionError, match="搜索失败"):
         search_web("DeepSeek API", backend=FailingSearchBackend())
 
 

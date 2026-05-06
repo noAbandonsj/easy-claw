@@ -42,7 +42,7 @@ class StreamEvent:
 
 class ApprovalReviewer(Protocol):
     def review(self, interrupts: Sequence[object]) -> list[dict[str, object]]:
-        """Return LangGraph HITL decisions for interrupt payloads."""
+        """返回 LangGraph 人工审批决策。"""
 
 
 class StaticApprovalReviewer:
@@ -57,7 +57,7 @@ class StaticApprovalReviewer:
                 if self._approve:
                     decisions.append({"type": "approve"})
                 else:
-                    decisions.append({"type": "reject", "message": "Rejected by user."})
+                    decisions.append({"type": "reject", "message": "用户已拒绝。"})
         return decisions
 
 
@@ -68,26 +68,26 @@ class ConsoleApprovalReviewer:
             value = _interrupt_value(interrupt)
             actions = _get_action_requests(value) or [{}]
             for action in actions:
-                name = _read_field(action, "name") or "unknown"
+                name = _read_field(action, "name") or "未知工具"
                 args = _read_field(action, "args") or {}
                 description = _read_field(action, "description")
-                print("\nTool execution requires approval")
-                print(f"Tool: {name}")
-                print(f"Args: {args}")
+                print("\n工具执行需要确认")
+                print(f"工具: {name}")
+                print(f"参数: {args}")
                 if description:
-                    print(f"Reason: {description}")
-                answer = input("Allow this action? [y/N] ").strip().lower()
+                    print(f"原因: {description}")
+                answer = input("允许执行？[y/N] ").strip().lower()
                 if answer in {"y", "yes"}:
                     decisions.append({"type": "approve"})
                 else:
-                    decisions.append({"type": "reject", "message": "Rejected by user."})
+                    decisions.append({"type": "reject", "message": "用户已拒绝。"})
         return decisions
 
 
 class FakeAgentRuntime:
     def run(self, request: AgentRequest) -> AgentResult:
         return AgentResult(
-            content=f"easy-claw dry run: {request.prompt}",
+            content=f"easy-claw dry-run 测试：{request.prompt}",
             thread_id=request.thread_id,
         )
 
@@ -102,14 +102,14 @@ class DeepAgentsRuntime:
 
     def open_session(self, request: AgentRequest) -> DeepAgentSession:
         if request.config is None:
-            raise RuntimeError("config is required for DeepAgentsRuntime.")
+            raise RuntimeError("DeepAgentsRuntime 必须传入 config。")
         cfg = request.config
         if cfg.model is None:
-            raise RuntimeError("Set EASY_CLAW_MODEL before running chat without --dry-run.")
+            raise RuntimeError("运行非 dry-run 聊天前请先设置 EASY_CLAW_MODEL。")
         if cfg.api_key is None:
-            raise RuntimeError("Set EASY_CLAW_API_KEY before running chat without --dry-run.")
+            raise RuntimeError("运行非 dry-run 聊天前请先设置 EASY_CLAW_API_KEY。")
         if cfg.checkpoint_db_path is None:
-            raise RuntimeError("checkpoint_db_path is required for DeepAgentsRuntime.")
+            raise RuntimeError("DeepAgentsRuntime 必须配置 checkpoint_db_path。")
 
         cfg.checkpoint_db_path.parent.mkdir(parents=True, exist_ok=True)
         system_prompt = _build_system_prompt()
@@ -231,22 +231,18 @@ def _build_interrupt_on(
 def _build_system_prompt() -> str:
     return "\n\n".join(
         [
-            "You are easy-claw, an agent-first Windows personal code assistant.",
-            "The user should describe tasks naturally; do not ask them to manually run "
-            "docs/tools/dev commands.",
-            "Use available tools proactively to read files, run tests, inspect projects, "
-            "and search the web.",
-            "Operate inside the selected workspace unless the user explicitly asks "
-            "for another path.",
-            "You have access to Basic Memory tools (write_note, search_notes, read_note, etc.) "
-            "if configured via MCP. Use them to remember important facts and search for past "
-            "information across sessions.",
+            "你是 easy-claw，一个 Windows 优先的个人代码助手。",
+            "用户会用自然语言描述任务；不要要求用户手动运行 docs、tools 或 dev 命令。",
+            "请主动使用可用工具读取文件、运行测试、分析项目和搜索网页。",
+            "除非用户明确要求其他路径，否则请在当前工作区内操作。",
+            "如果已通过 MCP 配置 Basic Memory 工具（write_note、search_notes、read_note 等），"
+            "请用它们记住重要事实，并在跨会话时检索过去信息。",
         ]
     )
 
 
 def _extract_last_message_info(result: object) -> tuple[str, dict[str, int] | None]:
-    """Return (content, usage) from agent invoke result."""
+    """从 agent 调用结果中提取回复内容和用量。"""
     if not isinstance(result, dict):
         return str(result), None
 
@@ -393,7 +389,7 @@ def _tool_result_event_from_message(
         return None
 
     content = _text_from_message(message)
-    name = _read_field(message, "name") or _read_field(message, "tool_name") or "tool"
+    name = _read_field(message, "name") or _read_field(message, "tool_name") or "工具"
     return StreamEvent(
         type="tool_call_result",
         content=content,

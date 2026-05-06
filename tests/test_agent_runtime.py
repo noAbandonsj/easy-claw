@@ -48,7 +48,7 @@ def test_fake_agent_runtime_returns_deterministic_result(tmp_path):
         )
     )
 
-    assert result.content == "easy-claw dry run: hello"
+    assert result.content == "easy-claw dry-run 测试：hello"
     assert result.thread_id == "thread-1"
 
 

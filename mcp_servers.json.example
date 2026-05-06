@@ -1,5 +1,5 @@
 {
-    "_comment": "MCP server configurations for easy-claw. Copy to mcp_servers.json and edit.",
+    "_comment": "easy-claw 的 MCP 服务配置示例。复制为 mcp_servers.json 后按本机环境修改。",
     "basic-memory": {
         "command": "uvx",
         "args": ["basic-memory", "mcp"],

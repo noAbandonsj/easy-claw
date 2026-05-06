@@ -12,7 +12,7 @@ except ImportError:  # pragma: no cover
 
 
 def _check_playwright_browsers(*, headless: bool) -> bool:
-    """Return True if the needed Playwright Chromium browsers are installed."""
+    """如果所需 Playwright Chromium 浏览器已安装，则返回 True。"""
     import os as _os
     from pathlib import Path as _Path
 
@@ -39,10 +39,10 @@ async def _async_launch_browser(*, headless: bool):
 
 
 def _patch_tool_sync_run(tool, loop):
-    """Patch a browser tool's _run to delegate to _arun via the background loop.
+    """把浏览器工具的 _run 委托到后台事件循环里的 _arun。
 
-    All async Playwright calls now execute on the same dedicated event-loop
-    thread, eliminating greenlet cross-thread errors and asyncio.run() crashes.
+    所有异步 Playwright 调用都在同一个专用事件循环线程中执行，
+    避免 greenlet 跨线程错误和 asyncio.run() 崩溃。
     """
     async_run = tool._arun
 
@@ -58,13 +58,13 @@ def build_browser_tools(*, enabled: bool, headless: bool) -> ToolBundle:
 
     if PlayWrightBrowserToolkit is None:
         raise ToolExecutionError(
-            "Browser tools require langchain-community and playwright. "
-            "Run: uv sync && uv run playwright install chromium"
+            "浏览器工具需要 langchain-community 和 playwright。"
+            "请运行：uv sync && uv run playwright install chromium"
         )
 
     if not _check_playwright_browsers(headless=headless):
         raise ToolExecutionError(
-            "Playwright Chromium browser is not installed. Run: uv run playwright install chromium"
+            "未安装 Playwright Chromium 浏览器。请运行：uv run playwright install chromium"
         )
 
     loop = get_background_loop()
@@ -75,10 +75,9 @@ def build_browser_tools(*, enabled: bool, headless: bool) -> ToolBundle:
         msg = str(exc)
         if "Executable" in msg or "playwright install" in msg:
             raise ToolExecutionError(
-                "Playwright Chromium browser is not installed. "
-                "Run: uv run playwright install chromium"
+                "未安装 Playwright Chromium 浏览器。请运行：uv run playwright install chromium"
             ) from exc
-        raise ToolExecutionError(f"Failed to launch browser: {exc}") from exc
+        raise ToolExecutionError(f"启动浏览器失败：{exc}") from exc
 
     toolkit = PlayWrightBrowserToolkit.from_browser(async_browser=async_browser)
     tools = list(toolkit.get_tools())

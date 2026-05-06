@@ -34,13 +34,13 @@ from easy_claw.tools.search import search_web
 console = Console()
 DEFAULT_SKILLS_ROOT = Path("skills")
 STREAM_PANEL_VALUE_LIMIT = 1200
-app = typer.Typer(help="easy-claw - your personal AI assistant for Windows")
-dev_app = typer.Typer(help="Developer and debugging commands")
-skills_app = typer.Typer(help="Manage Markdown skills")
-tools_app = typer.Typer(help="Run local power tools")
-sessions_app = typer.Typer(help="Manage chat sessions")
-app.add_typer(sessions_app, name="sessions", rich_help_panel="Management")
-app.add_typer(dev_app, name="dev", rich_help_panel="Development")
+app = typer.Typer(help="easy-claw - Windows 优先的本地 AI 助手")
+dev_app = typer.Typer(help="开发者调试命令")
+skills_app = typer.Typer(help="管理 Markdown 技能")
+tools_app = typer.Typer(help="运行本地工具")
+sessions_app = typer.Typer(help="管理聊天会话")
+app.add_typer(sessions_app, name="sessions", rich_help_panel="管理")
+app.add_typer(dev_app, name="dev", rich_help_panel="开发")
 dev_app.add_typer(skills_app, name="skills")
 dev_app.add_typer(tools_app, name="tools")
 
@@ -58,91 +58,87 @@ def _main_callback(
         "--version",
         callback=_version_callback,
         is_eager=True,
-        help="Show version and exit.",
+        help="显示版本并退出。",
     ),
 ) -> None:
     pass
 
 
-@app.command(rich_help_panel="Management")
+@app.command(rich_help_panel="管理")
 def doctor() -> None:
-    """Print local environment diagnostics."""
+    """打印本地环境诊断信息。"""
     config = load_config()
     console.print("easy-claw doctor")
-    console.print(f"data_dir: {config.data_dir}")
-    console.print(f"product_db: {config.product_db_path}")
-    console.print(f"checkpoint_db: {config.checkpoint_db_path}")
-    console.print(f"workspace: {config.default_workspace}")
-    console.print(f"model: {config.model or '<not configured>'}")
-    console.print(f"base_url: {config.base_url}")
-    console.print(f"approval_mode: {config.approval_mode}")
-    console.print(f"execution_mode: {config.execution_mode}")
-    console.print(f"browser_enabled: {config.browser_enabled}")
-    console.print(f"browser_headless: {config.browser_headless}")
-    console.print(f"mcp_enabled: {config.mcp_enabled}")
-    console.print(f"mcp_mode: {config.mcp_mode}")
-    console.print(f"mcp_config_path: {config.mcp_config_path}")
-    console.print(f"max_model_calls: {config.max_model_calls}")
-    console.print(f"max_tool_calls: {config.max_tool_calls}")
-    api_key_display = "***" + config.api_key[-4:] if config.api_key else "<not configured>"
-    console.print(f"api_key: {api_key_display}")
+    console.print(f"数据目录: {config.data_dir}")
+    console.print(f"业务数据库: {config.product_db_path}")
+    console.print(f"检查点数据库: {config.checkpoint_db_path}")
+    console.print(f"工作区: {config.default_workspace}")
+    console.print(f"模型: {config.model or '<未配置>'}")
+    console.print(f"模型服务地址: {config.base_url}")
+    console.print(f"审批模式: {config.approval_mode}")
+    console.print(f"执行模式: {config.execution_mode}")
+    console.print(f"浏览器工具: {config.browser_enabled}")
+    console.print(f"浏览器无头模式: {config.browser_headless}")
+    console.print(f"MCP 启用状态: {_mcp_status(config)}")
+    console.print(f"MCP 模式: {config.mcp_mode}")
+    console.print(f"MCP 配置文件: {config.mcp_config_path}")
+    console.print(f"模型调用上限: {config.max_model_calls}")
+    console.print(f"工具调用上限: {config.max_tool_calls}")
+    api_key_display = "***" + config.api_key[-4:] if config.api_key else "<未配置>"
+    console.print(f"密钥: {api_key_display}")
 
-    # Browser diagnostics
+    # 浏览器诊断
     console.print()
-    console.print("[bold]Browser diagnostics[/]")
+    console.print("[bold]浏览器诊断[/]")
     try:
         from easy_claw.tools.browser import _check_playwright_browsers
     except ImportError:
-        console.print("[yellow]playwright package not installed[/]")
+        console.print("[yellow]未安装 playwright 包[/]")
         return
 
     chromium_installed = _check_playwright_browsers(headless=False)
     headless_installed = _check_playwright_browsers(headless=True)
-    console.print(
-        f"Chromium (headed): {'installed' if chromium_installed else '[red]not installed[/]'}"
-    )
-    console.print(
-        f"Chromium (headless): {'installed' if headless_installed else '[red]not installed[/]'}"
-    )
+    console.print(f"Chromium（有界面）: {'已安装' if chromium_installed else '[red]未安装[/]'}")
+    console.print(f"Chromium（无头）: {'已安装' if headless_installed else '[red]未安装[/]'}")
 
     if not chromium_installed and not headless_installed:
-        console.print("[dim]Run: uv run playwright install chromium[/]")
+        console.print("[dim]请运行：uv run playwright install chromium[/]")
         return
 
-    # Live browser test — launch, navigate, extract text, close
+    # 浏览器实时检查：启动、加载页面、提取文本、关闭。
     if config.browser_enabled:
-        console.print("[dim]Testing browser launch and navigation...[/]")
+        console.print("[dim]正在测试浏览器启动和页面访问...[/]")
         try:
             from easy_claw.tools.browser import build_browser_tools
 
             bundle = build_browser_tools(enabled=True, headless=True)
-            console.print(f"[green]Browser launched[/] — {len(bundle.tools)} tools loaded")
+            console.print(f"[green]浏览器已启动[/] — 已加载 {len(bundle.tools)} 个工具")
             for cb in bundle.cleanup:
                 cb()
-            console.print("[green]Browser closed cleanly[/]")
+            console.print("[green]浏览器已正常关闭[/]")
         except Exception as exc:
-            console.print(f"[red]Browser test failed: {exc}[/]")
+            console.print(f"[red]浏览器测试失败：{exc}[/]")
 
 
-@app.command("init-db", rich_help_panel="Management")
+@app.command("init-db", rich_help_panel="管理")
 def init_db() -> None:
-    """Initialize local product storage."""
+    """初始化本地存储。"""
     config = load_config()
     initialize_product_db(config.product_db_path)
-    console.print(f"initialized {config.product_db_path}")
+    console.print(f"已初始化 {config.product_db_path}")
 
 
 @sessions_app.command("list")
 def list_sessions() -> None:
-    """List past chat sessions."""
+    """列出历史聊天会话。"""
     config = load_config()
     initialize_product_db(config.product_db_path)
     repo = SessionRepository(config.product_db_path)
     sessions = repo.list_sessions()
     if not sessions:
-        console.print("[dim]No sessions found.[/]")
+        console.print("[dim]没有找到会话。[/]")
         return
-    table = Table("ID", "Title", "Model", "Updated")
+    table = Table("ID", "标题", "模型", "更新时间")
     for s in sessions:
         table.add_row(s.id[:8], s.title[:60], s.model or "-", s.updated_at[:19])
     console.print(table)
@@ -150,20 +146,20 @@ def list_sessions() -> None:
 
 @sessions_app.command("resume")
 def resume_session(
-    session_id: Annotated[str, typer.Argument(help="Session ID (first 8 chars are enough)")],
-    model: Annotated[str | None, typer.Option("--model", help="Override the model.")] = None,
+    session_id: Annotated[str, typer.Argument(help="会话 ID，输入前 8 位即可")],
+    model: Annotated[str | None, typer.Option("--model", help="覆盖模型名称。")] = None,
 ) -> None:
-    """Resume an existing chat session."""
+    """恢复已有聊天会话。"""
     config = load_config()
     if model is not None:
         config = dataclasses.replace(config, model=model)
     initialize_product_db(config.product_db_path)
     repo = SessionRepository(config.product_db_path)
 
-    # Match by prefix
+    # 按前缀匹配会话。
     matched = _find_session_by_prefix(repo, session_id)
     if matched is None:
-        console.print(f"No session found matching [bold]{session_id}[/].")
+        console.print(f"没有找到匹配 [bold]{session_id}[/] 的会话。")
         raise typer.Exit(code=1)
 
     _run_interactive_chat(dry_run=False, config=config, resume_thread_id=matched.id)
@@ -171,28 +167,28 @@ def resume_session(
 
 @sessions_app.command("delete")
 def delete_session(
-    session_id: Annotated[str, typer.Argument(help="Session ID (first 8 chars are enough)")],
-    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation."),
+    session_id: Annotated[str, typer.Argument(help="会话 ID，输入前 8 位即可")],
+    force: bool = typer.Option(False, "--force", "-f", help="跳过确认。"),
 ) -> None:
-    """Delete a chat session and its checkpoints."""
+    """删除聊天会话及其检查点。"""
     config = load_config()
     initialize_product_db(config.product_db_path)
     repo = SessionRepository(config.product_db_path)
 
     matched = _find_session_by_prefix(repo, session_id)
     if matched is None:
-        console.print(f"No session found matching [bold]{session_id}[/].")
+        console.print(f"没有找到匹配 [bold]{session_id}[/] 的会话。")
         raise typer.Exit(code=1)
 
     if not force:
         from typer import confirm
 
-        if not confirm(f"Delete session [bold]{matched.title}[/] ({matched.id[:8]})?"):
+        if not confirm(f"确认删除会话 [bold]{matched.title}[/] ({matched.id[:8]})？"):
             raise typer.Exit()
 
     repo.delete_session(matched.id)
     _delete_checkpoint_thread(matched.id, config.checkpoint_db_path)
-    console.print(f"Deleted session [bold]{matched.title}[/].")
+    console.print(f"已删除会话 [bold]{matched.title}[/]。")
 
 
 def _find_session_by_prefix(repo: SessionRepository, prefix: str) -> SessionRecord | None:
@@ -200,12 +196,12 @@ def _find_session_by_prefix(repo: SessionRepository, prefix: str) -> SessionReco
     matches = [s for s in sessions if s.id.startswith(prefix)]
     if len(matches) == 1:
         return matches[0]
-    # Fall back to exact match
+    # 前缀不唯一时回退为精确匹配。
     return repo.get_session(prefix)
 
 
 def _delete_checkpoint_thread(thread_id: str, checkpoint_db_path: Path) -> None:
-    """Delete all checkpoints for a thread using langgraph's public API."""
+    """使用 LangGraph 公开接口删除指定线程的所有检查点。"""
     from langgraph.checkpoint.sqlite import SqliteSaver
 
     if not checkpoint_db_path.exists():
@@ -214,44 +210,41 @@ def _delete_checkpoint_thread(thread_id: str, checkpoint_db_path: Path) -> None:
         with SqliteSaver.from_conn_string(str(checkpoint_db_path)) as saver:
             saver.delete_thread(thread_id)
     except Exception:
-        console.print(
-            f"[yellow]Warning:[/] deleted session but failed to clean up "
-            f"checkpoints in {checkpoint_db_path}"
-        )
+        console.print(f"[yellow]警告：[/]会话已删除，但未能清理 {checkpoint_db_path} 中的检查点")
 
 
 @skills_app.command("list")
 def list_skills(
     skills_root: Annotated[Path, typer.Option("--skills-root")] = DEFAULT_SKILLS_ROOT,
 ) -> None:
-    """List available Markdown skills."""
+    """列出可用 Markdown 技能。"""
     skills = discover_skills(skills_root)
-    table = Table("Name", "Description", "Path")
+    table = Table("名称", "说明", "路径")
     for skill in skills:
         table.add_row(skill.name, skill.description, str(skill.path))
     console.print(table)
 
 
-@app.command(rich_help_panel="Management")
+@app.command(rich_help_panel="管理")
 def serve(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8787, "--port"),
 ) -> None:
-    """Start the local API service (developers only)."""
+    """启动本地 API 服务（开发者向）。"""
     uvicorn.run("easy_claw.api.main:app", host=host, port=port)
 
 
-@app.command(rich_help_panel="Primary")
+@app.command(rich_help_panel="主命令")
 def chat(
     prompt: Annotated[str | None, typer.Argument()] = None,
     dry_run: bool = typer.Option(False, "--dry-run"),
     interactive: bool = typer.Option(False, "--interactive", "-i"),
     model: Annotated[
         str | None,
-        typer.Option("--model", help="Override the model (e.g. deepseek-chat)."),
+        typer.Option("--model", help="覆盖模型名称，例如 deepseek-chat。"),
     ] = None,
 ) -> None:
-    """Start the interactive AI assistant (run without args for interactive mode)."""
+    """启动 AI 助手；不传参数时建议使用交互模式。"""
     config = load_config()
     if model is not None:
         config = dataclasses.replace(config, model=model)
@@ -261,7 +254,7 @@ def chat(
         return
 
     if prompt is None or prompt.strip() == "":
-        console.print("Prompt is required unless --interactive is used.")
+        console.print("请提供提示词，或使用 --interactive 启动交互模式。")
         raise typer.Exit(code=1)
 
     if dry_run:
@@ -276,7 +269,7 @@ def chat(
         return
 
     if config.model is None:
-        console.print("Set EASY_CLAW_MODEL before running chat without --dry-run.")
+        console.print("请先设置 EASY_CLAW_MODEL，再运行非 dry-run 聊天。")
         raise typer.Exit(code=1)
 
     initialize_product_db(config.product_db_path)
@@ -284,7 +277,7 @@ def chat(
     session = SessionRepository(config.product_db_path).create_session(
         workspace_path=str(config.default_workspace),
         model=config.model,
-        title=prompt[:60] or "Chat",
+        title=prompt[:60] or "聊天",
     )
     skill_sources = discover_skill_sources(config.cwd / "skills", config.default_workspace)
     result = DeepAgentsRuntime().run(
@@ -309,7 +302,7 @@ def _run_interactive_chat(
     resume_thread_id: str | None = None,
 ) -> None:
     if not dry_run and config.model is None:
-        console.print("Set EASY_CLAW_MODEL before running chat without --dry-run.")
+        console.print("请先设置 EASY_CLAW_MODEL，再运行非 dry-run 聊天。")
         raise typer.Exit(code=1)
 
     if dry_run:
@@ -342,7 +335,7 @@ def _run_interactive_chat(
 
     _render_startup_banner(config)
 
-    # First iteration: use resume_thread_id if given, otherwise create new session
+    # 首轮使用传入的会话 ID；没有传入时创建新会话。
     thread_id: str | None = resume_thread_id
     open_session = getattr(runtime, "open_session", None)
 
@@ -351,7 +344,7 @@ def _run_interactive_chat(
             session = SessionRepository(config.product_db_path).create_session(
                 workspace_path=str(config.default_workspace),
                 model=config.model,
-                title="Interactive chat",
+                title="交互式聊天",
             )
             thread_id = session.id
 
@@ -393,16 +386,16 @@ def _run_interactive_chat(
         if restart.startswith("/workspace "):
             new_path = Path(restart[len("/workspace ") :]).resolve()
             if not new_path.is_dir():
-                console.print(f"[yellow]Not a directory: {new_path}[/]")
+                console.print(f"[yellow]不是目录：{new_path}[/]")
                 continue
             config = dataclasses.replace(config, default_workspace=new_path)
-            # Keep thread_id and conversation across workspace switches
-            console.print(f"[dim]Workspace changed to {new_path}[/]")
+            # 切换工作区时保留会话 ID 和对话历史。
+            console.print(f"[dim]工作区已切换到 {new_path}[/]")
         else:
-            thread_id = None  # /clear: create a new session next iteration
+            thread_id = None  # /clear：下一轮创建新会话。
             conversation.clear()
             token_usage.clear()
-            console.print("[dim]Conversation cleared. Starting fresh.[/]")
+            console.print("[dim]对话历史已清空，已开始新会话。[/]")
 
 
 def _run_interactive_loop(
@@ -416,12 +409,12 @@ def _run_interactive_loop(
     conversation: list[tuple[str, str]] | None = None,
     token_usage: dict[str, int] | None = None,
 ) -> str | None:
-    """Run the REPL loop.
+    """运行交互式循环。
 
-    Returns:
-        None if the user quit.
-        \"clear\" if the caller should restart with a fresh session.
-        \"/workspace <path>\" if the caller should switch workspace.
+    返回值：
+        None 表示用户退出。
+        \"clear\" 表示调用方应重新创建会话。
+        \"/workspace <path>\" 表示调用方应切换工作区。
     """
     if conversation is None:
         conversation = []
@@ -449,15 +442,15 @@ def _run_interactive_loop(
         if prompt.lower() == "/clear":
             if supports_clear:
                 return "clear"
-            console.print("[dim]History clearing is not supported in dry-run mode.[/]")
+            console.print("[dim]dry-run 模式不支持清空历史。[/]")
             continue
         if prompt.lower().startswith("/workspace"):
             if not supports_clear:
-                console.print("[dim]Workspace switching is not supported in dry-run mode.[/]")
+                console.print("[dim]dry-run 模式不支持切换工作区。[/]")
                 continue
             parts = prompt.split(maxsplit=1)
             if len(parts) < 2 or not parts[1].strip():
-                console.print("[yellow]Usage: /workspace <path>[/]")
+                console.print("[yellow]用法：/workspace <路径>[/]")
                 continue
             return f"/workspace {parts[1].strip()}"
         if prompt.lower() == "/status":
@@ -469,17 +462,17 @@ def _run_interactive_loop(
         if prompt.lower().startswith("/save"):
             parts = prompt.split(maxsplit=1)
             if len(parts) < 2 or not parts[1].strip():
-                console.print("[yellow]Usage: /save <path>[/]")
+                console.print("[yellow]用法：/save <路径>[/]")
                 continue
             save_path = Path(parts[1].strip()).expanduser().resolve()
             _write_conversation_markdown(conversation, save_path, session_id, session_config)
-            console.print(f"[dim]Conversation saved to {save_path}[/]")
+            console.print(f"[dim]对话已保存到 {save_path}[/]")
             continue
 
         if stream_turn is not None:
             response, usage = _render_streaming_turn(stream_turn(prompt))
         else:
-            with console.status("[dim]Thinking...[/]"):
+            with console.status("[dim]正在思考...[/]"):
                 result = run_turn(prompt)
             response = result.content
             usage = result.usage
@@ -505,7 +498,7 @@ def _agent_request_for_prompt(request: AgentRequest, prompt: str) -> AgentReques
 
 @tools_app.command("search")
 def tool_search(query: str) -> None:
-    """Search the web."""
+    """联网搜索。"""
     config = load_config()
     initialize_product_db(config.product_db_path)
     try:
@@ -521,7 +514,7 @@ def tool_search(query: str) -> None:
         event_type="web_search",
         payload={"query": query, "result_count": len(results)},
     )
-    table = Table("Title", "URL", "Snippet")
+    table = Table("标题", "URL", "摘要")
     for result in results:
         table.add_row(result.title, result.url, result.snippet)
     console.print(table)
@@ -529,7 +522,7 @@ def tool_search(query: str) -> None:
 
 @tools_app.command("run")
 def tool_run(command: str) -> None:
-    """Run a local shell command."""
+    """执行本地 shell 命令。"""
     config = load_config()
     initialize_product_db(config.product_db_path)
     result = run_command(command, cwd=config.cwd)
@@ -554,7 +547,7 @@ def tool_run(command: str) -> None:
 
 @tools_app.command("python")
 def tool_python(code: str) -> None:
-    """Run a local Python snippet."""
+    """执行本地 Python 片段。"""
     config = load_config()
     initialize_product_db(config.product_db_path)
     result = run_python_code(code, cwd=config.cwd)
@@ -577,11 +570,11 @@ def tool_python(code: str) -> None:
 
 
 def _render_streaming_turn(events: Iterable[StreamEvent]) -> tuple[str, dict[str, int] | None]:
-    """Render a streaming turn. Returns (response_text, usage)."""
+    """渲染一次流式回复，返回回复文本和用量。"""
     tokens: list[str] = []
     usage: dict[str, int] | None = None
     printed_token = False
-    spinner = console.status("[dim]Thinking...[/]")
+    spinner = console.status("[dim]正在思考...[/]")
     spinner.start()
     spinner_running = True
     try:
@@ -598,7 +591,7 @@ def _render_streaming_turn(events: Iterable[StreamEvent]) -> tuple[str, dict[str
                 console.print(
                     Panel(
                         _format_stream_value(event.tool_args),
-                        title=f"Tool call: {event.tool_name or 'unknown'}",
+                        title=f"工具调用：{event.tool_name or '未知工具'}",
                         border_style="blue",
                     )
                 )
@@ -608,14 +601,14 @@ def _render_streaming_turn(events: Iterable[StreamEvent]) -> tuple[str, dict[str
                 console.print(
                     Panel(
                         _format_stream_value(event.content or event.tool_result),
-                        title=f"Tool result: {event.tool_name or 'unknown'}",
+                        title=f"工具结果：{event.tool_name or '未知工具'}",
                         border_style="green",
                     )
                 )
                 printed_token = False
             elif event.type == "approval_required":
                 _print_stream_separator(printed_token)
-                console.print("[yellow]Tool execution requires approval[/]")
+                console.print("[yellow]工具执行需要确认[/]")
                 printed_token = False
             elif event.type == "done":
                 if spinner_running:
@@ -645,20 +638,20 @@ def _write_conversation_markdown(
     from datetime import datetime
 
     lines: list[str] = []
-    lines.append("# easy-claw Conversation")
+    lines.append("# easy-claw 对话记录")
     lines.append("")
-    lines.append(f"- **Session:** `{session_id}`")
-    lines.append(f"- **Model:** {config.model if config else 'N/A'}")
-    lines.append(f"- **Workspace:** {config.default_workspace if config else 'N/A'}")
-    lines.append(f"- **Exported:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(f"- **会话：** `{session_id}`")
+    lines.append(f"- **模型：** {config.model if config else '未配置'}")
+    lines.append(f"- **工作区：** {config.default_workspace if config else '未配置'}")
+    lines.append(f"- **导出时间：** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     lines.append("")
     lines.append("---")
     lines.append("")
 
     for i, (user_msg, assistant_msg) in enumerate(conversation, 1):
-        lines.append(f"### Turn {i}")
+        lines.append(f"### 第 {i} 轮")
         lines.append("")
-        lines.append("**You:**")
+        lines.append("**用户：**")
         lines.append("")
         lines.append(f"{user_msg}")
         lines.append("")
@@ -674,16 +667,16 @@ def _write_conversation_markdown(
 
 
 def _print_help() -> None:
-    """Print available slash commands in the interactive REPL."""
-    table = Table(title="Available Commands", title_style="bold")
-    table.add_column("Command", style="bold cyan")
-    table.add_column("Description")
-    table.add_row("/help", "Show this help message")
-    table.add_row("/clear", "Clear conversation history and start a new session")
-    table.add_row("/workspace <path>", "Switch the working directory")
-    table.add_row("/save <path>", "Save the conversation to a Markdown file")
-    table.add_row("/status", "Show current session details and token usage")
-    table.add_row("exit, quit, :q", "Exit the assistant")
+    """打印交互式命令说明。"""
+    table = Table(title="可用命令", title_style="bold")
+    table.add_column("命令", style="bold cyan")
+    table.add_column("说明")
+    table.add_row("/help", "显示帮助")
+    table.add_row("/clear", "清空对话历史并开始新会话")
+    table.add_row("/workspace <路径>", "切换工作区")
+    table.add_row("/save <路径>", "把对话保存为 Markdown 文件")
+    table.add_row("/status", "显示当前会话和 token 用量")
+    table.add_row("exit, quit, :q", "退出助手")
     console.print(table)
 
 
@@ -694,18 +687,18 @@ def _print_session_status(
     token_usage: dict[str, int] | None = None,
 ) -> None:
     cfg = config
-    table = Table(title=f"Session {session_id[:8]}", title_style="bold")
-    table.add_column("Property", style="bold cyan")
-    table.add_column("Value")
-    table.add_row("Model", cfg.model if cfg else "N/A")
-    table.add_row("Workspace", str(cfg.default_workspace) if cfg else "N/A")
-    table.add_row("Approval mode", cfg.approval_mode if cfg else "N/A")
-    table.add_row("Turns", str(len(conversation)))
+    table = Table(title=f"会话 {session_id[:8]}", title_style="bold")
+    table.add_column("属性", style="bold cyan")
+    table.add_column("值")
+    table.add_row("模型", cfg.model if cfg else "未配置")
+    table.add_row("工作区", str(cfg.default_workspace) if cfg else "未配置")
+    table.add_row("审批模式", cfg.approval_mode if cfg else "未配置")
+    table.add_row("轮次", str(len(conversation)))
     if token_usage:
-        table.add_row("Tokens in", f"{token_usage.get('input', 0):,}")
-        table.add_row("Tokens out", f"{token_usage.get('output', 0):,}")
-        table.add_row("Tokens total", f"{token_usage.get('total', 0):,}")
-    table.add_row("Checkpoints", str(cfg.checkpoint_db_path) if cfg else "N/A")
+        table.add_row("输入 token", f"{token_usage.get('input', 0):,}")
+        table.add_row("输出 token", f"{token_usage.get('output', 0):,}")
+        table.add_row("总 token", f"{token_usage.get('total', 0):,}")
+    table.add_row("检查点", str(cfg.checkpoint_db_path) if cfg else "未配置")
     console.print(table)
 
 
@@ -721,7 +714,7 @@ def _format_stream_value(value: object) -> str:
             text = str(value)
     if len(text) <= STREAM_PANEL_VALUE_LIMIT:
         return text
-    return text[:STREAM_PANEL_VALUE_LIMIT] + "\n\\[truncated]"
+    return text[:STREAM_PANEL_VALUE_LIMIT] + "\n\\[已截断]"
 
 
 def _count_mcp_servers(config_path: str) -> int:
@@ -742,29 +735,29 @@ def _mcp_status(config: AppConfig) -> str:
     mode = getattr(config, "mcp_mode", "enabled" if config.mcp_enabled else "disabled")
     if mode == "auto":
         count = _count_mcp_servers(config.mcp_config_path)
-        return f"auto ({count} servers)" if count else "auto"
+        return f"auto（{count} 个服务）" if count else "auto"
     if mode == "enabled" or config.mcp_enabled:
         count = _count_mcp_servers(config.mcp_config_path)
-        return f"enabled ({count} servers)" if count else "enabled"
-    return "disabled"
+        return f"已启用（{count} 个服务）" if count else "已启用"
+    return "已关闭"
 
 
 def _render_startup_banner(config: AppConfig) -> None:  # noqa: F821
-    """Render a startup banner showing current configuration."""
+    """渲染启动横幅，展示当前配置。"""
     approval_color = {"permissive": "green", "balanced": "yellow", "strict": "red"}
     color = approval_color.get(config.approval_mode, "white")
 
     grid = Table.grid(padding=(0, 2))
     grid.add_column(style="bold cyan", justify="right")
     grid.add_column(style="white")
-    grid.add_row("Model:", config.model or "[dim]dry-run[/]")
-    grid.add_row("Workspace:", str(config.default_workspace))
+    grid.add_row("模型:", config.model or "[dim]dry-run[/]")
+    grid.add_row("工作区:", str(config.default_workspace))
     grid.add_row(
-        "Approval:",
+        "审批:",
         f"[{color}]{config.approval_mode}[/]",
     )
-    grid.add_row("Browser:", "enabled" if config.browser_enabled else "disabled")
-    grid.add_row("MCP tools:", _mcp_status(config))
+    grid.add_row("浏览器:", "已启用" if config.browser_enabled else "已关闭")
+    grid.add_row("MCP 工具:", _mcp_status(config))
 
     banner = Panel(
         grid,
@@ -773,7 +766,7 @@ def _render_startup_banner(config: AppConfig) -> None:  # noqa: F821
         border_style="cyan",
     )
     console.print(banner)
-    console.print("[dim]Type /help to see all commands. :q/exit/quit to leave, empty to skip.[/]")
+    console.print("[dim]输入 /help 查看命令；输入 :q、exit 或 quit 退出；空行会跳过。[/]")
     console.print()
 
 

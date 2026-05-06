@@ -1,1 +1,1 @@
-"""FastAPI entry points for easy-claw."""
+"""easy-claw 的 FastAPI 入口。"""

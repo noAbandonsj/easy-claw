@@ -7,15 +7,14 @@ from typing import Any
 
 
 class ToolExecutionError(RuntimeError):
-    """Raised when a local tool cannot complete the requested operation."""
+    """本地工具无法完成请求时抛出。"""
 
 
 class _BackgroundEventLoop:
-    """A dedicated background thread with its own asyncio event loop.
+    """带独立 asyncio 事件循环的后台线程。
 
-    All async operations (browser launch, tool _arun, cleanup) run on the
-    same loop/thread, avoiding ``asyncio.run()`` which crashes when called
-    from inside an already-running loop (e.g. FastAPI).
+    浏览器启动、工具 _arun 和清理等异步操作都在同一个循环和线程中执行，
+    避免在 FastAPI 等已运行事件循环内调用 ``asyncio.run()`` 导致崩溃。
     """
 
     def __init__(self) -> None:
@@ -28,18 +27,18 @@ class _BackgroundEventLoop:
         self._thread.start()
 
     def run_coroutine(self, coro: Coroutine[Any, Any, Any]) -> Any:
-        """Submit *coro* to the background loop and block until it completes."""
+        """把协程提交到后台循环，并阻塞等待完成。"""
         if self._loop.is_closed():
-            raise RuntimeError("Background event loop is closed")
+            raise RuntimeError("后台事件循环已关闭")
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return future.result()
 
     def call_soon(self, callback: Any, *args: Any) -> None:
-        """Schedule a callback on the background loop (fire-and-forget)."""
+        """在后台循环上调度回调，不等待结果。"""
         self._loop.call_soon_threadsafe(callback, *args)
 
     def shutdown(self) -> None:
-        """Stop the background loop and join the thread."""
+        """停止后台事件循环并等待线程退出。"""
         if self._loop.is_closed():
             return
         self._loop.call_soon_threadsafe(self._loop.stop)
@@ -51,7 +50,7 @@ _background_loop: _BackgroundEventLoop | None = None
 
 
 def get_background_loop() -> _BackgroundEventLoop:
-    """Return (creating on first call) the shared background event loop."""
+    """返回共享后台事件循环，首次调用时创建。"""
     global _background_loop
     if _background_loop is None or _background_loop._loop.is_closed():
         _background_loop = _BackgroundEventLoop()

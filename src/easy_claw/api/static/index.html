@@ -223,7 +223,7 @@ body {
 <div id="banner">
     <span class="dot" id="conn-dot"></span>
     <span class="logo">easy-claw</span>
-    <span class="info" id="banner-info">connecting...</span>
+    <span class="info" id="banner-info">连接中...</span>
 </div>
 
 <div id="messages"></div>
@@ -269,7 +269,7 @@ function connect() {
         dotEl.classList.add('disconnected');
         inputEl.disabled = true;
         sendBtn.disabled = true;
-        statusEl.textContent = 'disconnected — reconnecting in 2s...';
+        statusEl.textContent = '连接已断开，2 秒后重连...';
         setTimeout(connect, 2000);
     };
     ws.onmessage = (e) => {
@@ -285,8 +285,8 @@ function handleMessage(msg) {
             workspace = msg.workspace || '';
             version = msg.version || '';
             sessionId = msg.session_id || '';
-            bannerInfo.textContent = 'model: ' + modelName + ' | workspace: ' + workspace + ' | v' + version + ' | ' + sessionId;
-            statusEl.textContent = 'ready';
+            bannerInfo.textContent = '模型：' + modelName + ' | 工作区：' + workspace + ' | v' + version + ' | ' + sessionId;
+            statusEl.textContent = '就绪';
             break;
         case 'token':
             appendToken(msg.content);
@@ -300,19 +300,19 @@ function handleMessage(msg) {
             break;
         case 'approval_required':
             finishAssistant();
-            statusEl.textContent = 'tool approval required (auto-approved)';
+            statusEl.textContent = '工具执行需要确认（已自动批准）';
             break;
         case 'done':
             finishAssistant();
             if (msg.usage) {
                 totalTokens = msg.usage;
-                statusEl.textContent = 'tokens: ' + (msg.usage.input||0) + ' in / ' + (msg.usage.output||0) + ' out / ' + (msg.usage.total||0) + ' total';
+                statusEl.textContent = 'Token：输入 ' + (msg.usage.input||0) + ' / 输出 ' + (msg.usage.output||0) + ' / 总计 ' + (msg.usage.total||0);
             }
             turnCount++;
             break;
         case 'error':
             finishAssistant();
-            statusEl.textContent = 'error: ' + msg.content;
+            statusEl.textContent = '错误：' + msg.content;
             break;
     }
     scrollBottom();
@@ -338,8 +338,8 @@ function finishAssistant() {
 function addToolPanel(kind, name, content) {
     const panel = document.createElement('div');
     panel.className = 'tool-panel' + (kind === 'result' ? ' result' : '') + ' open';
-    const displayName = name || 'unknown';
-    const label = kind === 'call' ? 'Tool call: ' + displayName : 'Tool result: ' + displayName;
+    const displayName = name || '未知工具';
+    const label = kind === 'call' ? '工具调用：' + displayName : '工具结果：' + displayName;
     const formatted = formatContent(content);
     panel.innerHTML =
         '<div class="header ' + kind + '" onclick="togglePanel(this.parentElement)">' +
@@ -378,7 +378,7 @@ function send() {
         return;
     }
 
-    // User message bubble
+    // 用户消息气泡
     const userMsg = document.createElement('div');
     userMsg.className = 'message user';
     userMsg.textContent = text;
@@ -387,38 +387,38 @@ function send() {
     ws.send(text);
     inputEl.value = '';
     inputEl.style.height = '';
-    statusEl.textContent = 'thinking...';
+    statusEl.textContent = '思考中...';
 }
 
 function handleSlash(cmd) {
     switch (cmd) {
         case '/help':
             showModal(
-                '<h2>Commands</h2>' +
+                '<h2>命令</h2>' +
                 '<table>' +
-                '<tr><td>/help</td><td>Show this help</td></tr>' +
-                '<tr><td>/clear</td><td>Clear the conversation view</td></tr>' +
-                '<tr><td>/status</td><td>Show session info</td></tr>' +
-                '<tr><td>/save</td><td>Download conversation as Markdown</td></tr>' +
-                '<tr><td>exit, quit</td><td>Disconnect</td></tr>' +
+                '<tr><td>/help</td><td>显示帮助</td></tr>' +
+                '<tr><td>/clear</td><td>清空当前对话视图</td></tr>' +
+                '<tr><td>/status</td><td>显示会话信息</td></tr>' +
+                '<tr><td>/save</td><td>下载 Markdown 对话记录</td></tr>' +
+                '<tr><td>exit, quit</td><td>断开连接</td></tr>' +
                 '</table>' +
-                '<p style="margin-top:12px;font-size:13px;color:var(--dim)">/workspace switching is available in CLI mode.</p>'
+                '<p style="margin-top:12px;font-size:13px;color:var(--dim)">/workspace 切换仅在 CLI 模式可用。</p>'
             );
             break;
         case '/clear':
             msgEl.innerHTML = '';
-            statusEl.textContent = 'conversation cleared (server session kept)';
+            statusEl.textContent = '已清空对话视图（服务端会话仍保留）';
             break;
         case '/status':
             showModal(
-                '<h2>Session Status</h2>' +
+                '<h2>会话状态</h2>' +
                 '<table>' +
-                '<tr><td>Model</td><td>' + modelName + '</td></tr>' +
-                '<tr><td>Workspace</td><td>' + workspace + '</td></tr>' +
-                '<tr><td>Version</td><td>' + version + '</td></tr>' +
-                '<tr><td>Session</td><td>' + sessionId + '</td></tr>' +
-                '<tr><td>Turns</td><td>' + turnCount + '</td></tr>' +
-                '<tr><td>Tokens</td><td>' + (totalTokens.total || 0).toLocaleString() + '</td></tr>' +
+                '<tr><td>模型</td><td>' + modelName + '</td></tr>' +
+                '<tr><td>工作区</td><td>' + workspace + '</td></tr>' +
+                '<tr><td>版本</td><td>' + version + '</td></tr>' +
+                '<tr><td>会话</td><td>' + sessionId + '</td></tr>' +
+                '<tr><td>轮次</td><td>' + turnCount + '</td></tr>' +
+                '<tr><td>Token</td><td>' + (totalTokens.total || 0).toLocaleString() + '</td></tr>' +
                 '</table>'
             );
             break;
@@ -427,15 +427,15 @@ function handleSlash(cmd) {
             break;
         default:
             if (cmd.startsWith('/workspace')) {
-                statusEl.textContent = 'Workspace switching is CLI-only. Use "uv run easy-claw chat --interactive" for /workspace.';
+                statusEl.textContent = '/workspace 切换仅支持 CLI。请使用 "uv run easy-claw chat --interactive"。';
             } else {
-                statusEl.textContent = 'Unknown command: ' + cmd;
+                statusEl.textContent = '未知命令：' + cmd;
             }
     }
 }
 
 function showModal(html) {
-    modalContent.innerHTML = html + '<button class="close" onclick="closeModal()">Close</button>';
+    modalContent.innerHTML = html + '<button class="close" onclick="closeModal()">关闭</button>';
     modalOverlay.classList.add('show');
 }
 
@@ -448,20 +448,20 @@ modalOverlay.addEventListener('click', (e) => {
 });
 
 function downloadMarkdown() {
-    const parts = ['# easy-claw Conversation\n',
-        '\n- **Session:** `' + sessionId + '`',
-        '- **Model:** ' + modelName,
-        '- **Workspace:** ' + workspace,
-        '- **Exported:** ' + new Date().toISOString().replace('T',' ').slice(0,19),
+    const parts = ['# easy-claw 对话记录\n',
+        '\n- **会话：** `' + sessionId + '`',
+        '- **模型：** ' + modelName,
+        '- **工作区：** ' + workspace,
+        '- **导出时间：** ' + new Date().toISOString().replace('T',' ').slice(0,19),
         '\n---\n'];
     const children = msgEl.children;
     for (let i = 0; i < children.length; i++) {
         const el = children[i];
         if (el.classList.contains('message')) {
-            const role = el.classList.contains('user') ? '**You:**' : '**easy-claw:**';
+            const role = el.classList.contains('user') ? '**用户：**' : '**easy-claw：**';
             parts.push('\n' + role + '\n\n' + el.textContent + '\n');
         } else if (el.classList.contains('tool-panel')) {
-            const header = el.querySelector('.header')?.textContent || 'Tool';
+            const header = el.querySelector('.header')?.textContent || '工具';
             const body = el.querySelector('.body')?.textContent || '';
             parts.push('\n> ' + header + '\n> \n> ' + body.replace(/\n/g, '\n> ') + '\n');
         }
@@ -471,7 +471,7 @@ function downloadMarkdown() {
     a.href = URL.createObjectURL(blob);
     a.download = 'easy-claw-' + sessionId + '.md';
     a.click();
-    statusEl.textContent = 'conversation downloaded';
+    statusEl.textContent = '对话记录已下载';
 }
 
 inputEl.addEventListener('keydown', (e) => {

@@ -1,7 +1,7 @@
 [project]
 name = "easy-claw"
 version = "0.5.0"
-description = "Windows-first local AI agent workbench."
+description = "Windows 优先的本地 AI Agent 工作台。"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

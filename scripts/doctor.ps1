@@ -1,4 +1,7 @@
 $ErrorActionPreference = "Stop"
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$env:PYTHONIOENCODING = "utf-8"
 
 function Write-Check {
     param(
@@ -8,10 +11,10 @@ function Write-Check {
     )
 
     if ($Ok) {
-        Write-Host "[ok] $Name - $Detail"
+        Write-Host "[正常] $Name - $Detail"
     }
     else {
-        Write-Host "[missing] $Name - $Detail"
+        Write-Host "[缺失] $Name - $Detail"
     }
 }
 
@@ -19,9 +22,9 @@ $uv = Get-Command uv -ErrorAction SilentlyContinue
 $git = Get-Command git -ErrorAction SilentlyContinue
 $pyproject = Test-Path -LiteralPath "pyproject.toml"
 
-Write-Check "uv" ([bool]$uv) ($(if ($uv) { $uv.Source } else { "install uv first" }))
-Write-Check "git" ([bool]$git) ($(if ($git) { $git.Source } else { "install Git first" }))
-Write-Check "pyproject.toml" $pyproject "project metadata"
+Write-Check "uv" ([bool]$uv) ($(if ($uv) { $uv.Source } else { "请先安装 uv" }))
+Write-Check "git" ([bool]$git) ($(if ($git) { $git.Source } else { "请先安装 Git" }))
+Write-Check "pyproject.toml" $pyproject "项目元数据"
 
 if ($uv -and $pyproject) {
     uv run easy-claw doctor
