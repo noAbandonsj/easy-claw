@@ -1,7 +1,8 @@
 param(
     [string]$HostAddress = "127.0.0.1",
     [int]$Port = 8787,
-    [switch]$ApiServer
+    [switch]$ApiServer,
+    [switch]$Mcp
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,6 +17,10 @@ function Test-Command {
 
 if (-not (Test-Command "uv")) {
     Write-Error "缺少 uv。请先安装 uv：https://docs.astral.sh/uv/getting-started/installation/"
+}
+
+if ($Mcp) {
+    & (Join-Path $PSScriptRoot "setup-mcp.ps1")
 }
 
 Write-Host "正在同步依赖..."

@@ -11,6 +11,12 @@ def test_default_example_config_contains_only_basic_memory_server():
 
     assert set(config) == {"basic-memory"}
     assert config["basic-memory"]["transport"] == "stdio"
+    assert config["basic-memory"]["args"] == [
+        "basic-memory",
+        "mcp",
+        "--project",
+        "easy-claw",
+    ]
 
 
 class TestBuildMcpToolsDisabled:

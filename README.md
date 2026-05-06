@@ -88,6 +88,8 @@ uv run easy-claw doctor
 | 命令 | 说明 |
 |---|---|
 | `.\scripts\start.ps1` | 同步依赖、初始化数据库并启动聊天 |
+| `.\scripts\start.ps1 -Mcp` | 一键配置默认 MCP，并启动聊天 |
+| `.\scripts\setup-mcp.ps1` | 只配置默认 MCP，不启动聊天 |
 | `.\scripts\doctor.ps1` | 检查 uv、Git、项目配置和浏览器状态 |
 | `uv run easy-claw chat --interactive` | 手动启动交互式聊天 |
 | `uv run easy-claw chat --dry-run "你好"` | 不调用模型，只测试命令链路 |
@@ -156,19 +158,30 @@ EASY_CLAW_APPROVAL_MODE=balanced
 
 ---
 
-## MCP 记忆
+## MCP 工具
 
 MCP 默认是 `auto` 模式，但仓库只提供示例配置，不直接启用本机 MCP 服务。这样新手即使没有安装额外工具，也能稳定启动。
 
-如果需要跨会话记忆，推荐使用 `basic-memory`：
+如果需要 MCP 工具，推荐用启动脚本自动配置：
 
 ```powershell
-uv tool install basic-memory
-basic-memory init
-Copy-Item mcp_servers.json.example mcp_servers.json
+.\scripts\start.ps1 -Mcp
 ```
 
-`mcp_servers.json.example` 默认只配置 `basic-memory`。之前示例里曾包含 `filesystem`，现在不作为默认项，因为 easy-claw 和 DeepAgents 已经有文件读取、写入和命令执行能力；再默认启用 filesystem MCP 会重复能力，还会额外引入 Node / npx 依赖。
+这会自动完成：
+
+1. 创建项目内 Basic Memory 目录 `data\basic-memory`。
+2. 注册 Basic Memory 项目 `easy-claw`，指向这个目录。
+3. 复制 `mcp_servers.json.example` 为本机配置 `mcp_servers.json`。
+4. 启动交互式聊天。
+
+如果只想配置 MCP、不启动聊天，可以运行：
+
+```powershell
+.\scripts\setup-mcp.ps1
+```
+
+`mcp_servers.json.example` 默认只配置 `basic-memory`，并固定使用 Basic Memory 项目 `easy-claw`。之前示例里曾包含 `filesystem`，现在不作为默认项，因为 easy-claw 和 DeepAgents 已经有文件读取、写入和命令执行能力；再默认启用 filesystem MCP 会重复能力，还会额外引入 Node / npx 依赖。
 
 如果你确实需要 MCP filesystem，可以自行把它加入本机 `mcp_servers.json`。
 
@@ -233,6 +246,7 @@ easy-claw/
   scripts/
     start.ps1
     doctor.ps1
+    setup-mcp.ps1
   src/
     easy_claw/
       cli.py
