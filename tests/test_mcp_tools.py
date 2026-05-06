@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from langchain_core.tools import StructuredTool
 
 from easy_claw.tools.base import ToolExecutionError
 from easy_claw.tools.mcp import _read_servers_config, build_mcp_tools
@@ -279,3 +280,36 @@ class TestBuildMcpToolsSuccess:
 
         assert bundle.tools == [good_tool]
         assert bundle.interrupt_on == {"good_tool": True}
+
+    def test_wraps_async_only_mcp_tools_for_sync_agent_invocation(self, tmp_path, monkeypatch):
+        config_file = tmp_path / "servers.json"
+        config_file.write_text('{"amap": {"command": "npx", "args": [], "transport": "stdio"}}')
+
+        async def lookup(city: str) -> str:
+            return f"{city} ok"
+
+        async_only_tool = StructuredTool.from_function(
+            coroutine=lookup,
+            name="maps_weather",
+            description="天气查询",
+        )
+
+        class FakeClient:
+            def __init__(self, config):
+                pass
+
+            async def get_tools(self):
+                return [async_only_tool]
+
+            async def close(self):
+                pass
+
+        monkeypatch.setattr(
+            "easy_claw.tools.mcp.MultiServerMCPClient",
+            FakeClient,
+            raising=False,
+        )
+
+        bundle = build_mcp_tools(enabled=True, config_path=str(config_file))
+
+        assert bundle.tools[0].invoke({"city": "上海"}) == "上海 ok"

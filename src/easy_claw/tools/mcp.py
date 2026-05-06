@@ -5,13 +5,16 @@ import os
 import re
 import warnings
 from pathlib import Path
+from typing import Any
 
 from easy_claw.agent.types import ToolBundle
 from easy_claw.tools.base import ToolExecutionError, get_background_loop
 
 try:
+    from langchain_core.tools import StructuredTool
     from langchain_mcp_adapters.client import MultiServerMCPClient
 except ImportError:  # pragma: no cover
+    StructuredTool = None
     MultiServerMCPClient = None
 
 _ENV_REF_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
@@ -70,12 +73,43 @@ def build_mcp_tools(*, enabled: bool | str, config_path: str) -> ToolBundle:
     if not tools:
         return ToolBundle()
 
+    tools = [_ensure_sync_invocation(tool, loop) for tool in tools]
     interrupt_on = {tool.name: True for tool in tools}
 
     return ToolBundle(
         tools=list(tools),
         cleanup=(_make_mcp_cleanup(loop, client),),
         interrupt_on=interrupt_on,
+    )
+
+
+def _ensure_sync_invocation(tool: object, loop) -> object:
+    """让 async-only MCP 工具兼容当前同步 Agent 执行链。"""
+    if StructuredTool is None or not isinstance(tool, StructuredTool):
+        return tool
+    if tool.func is not None or tool.coroutine is None:
+        return tool
+
+    async_call = tool.coroutine
+
+    def sync_call(*args: Any, **kwargs: Any) -> Any:
+        return loop.run_coroutine(async_call(*args, **kwargs))
+
+    return StructuredTool(
+        name=tool.name,
+        description=tool.description,
+        args_schema=tool.args_schema,
+        return_direct=tool.return_direct,
+        verbose=tool.verbose,
+        callbacks=tool.callbacks,
+        tags=tool.tags,
+        metadata=tool.metadata,
+        handle_tool_error=tool.handle_tool_error,
+        handle_validation_error=tool.handle_validation_error,
+        response_format=tool.response_format,
+        extras=tool.extras,
+        func=sync_call,
+        coroutine=tool.coroutine,
     )
 
 
