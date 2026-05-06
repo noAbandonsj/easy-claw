@@ -1,8 +1,28 @@
 {
-    "_comment": "easy-claw 的 MCP 服务配置示例。复制为 mcp_servers.json 后按本机环境修改。",
+    "_comment": "easy-claw 的 MCP 服务配置示例。复制为 mcp_servers.json 后按本机环境修改。${变量名} 会从环境变量或 .env 读取。",
     "basic-memory": {
         "command": "uvx",
         "args": ["basic-memory", "mcp", "--project", "easy-claw"],
         "transport": "stdio"
+    },
+    "git": {
+        "command": "uvx",
+        "args": ["mcp-server-git", "--repository", "."],
+        "transport": "stdio"
+    },
+    "github": {
+        "transport": "http",
+        "url": "https://api.githubcopilot.com/mcp/",
+        "headers": {
+            "Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}"
+        }
+    },
+    "amap-maps": {
+        "command": "npx",
+        "args": ["-y", "@amap/amap-maps-mcp-server"],
+        "transport": "stdio",
+        "env": {
+            "AMAP_MAPS_API_KEY": "${AMAP_MAPS_API_KEY}"
+        }
     }
 }

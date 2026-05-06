@@ -6,10 +6,13 @@ from easy_claw.tools.base import ToolExecutionError
 from easy_claw.tools.mcp import _read_servers_config, build_mcp_tools
 
 
-def test_default_example_config_contains_only_basic_memory_server():
+def test_default_example_config_contains_default_mcp_servers(monkeypatch):
+    monkeypatch.setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "ghp_test")
+    monkeypatch.setenv("AMAP_MAPS_API_KEY", "amap_test")
+
     config = _read_servers_config(Path("mcp_servers.json.example"), auto_mode=False)
 
-    assert set(config) == {"basic-memory"}
+    assert set(config) == {"basic-memory", "git", "github", "amap-maps"}
     assert config["basic-memory"]["transport"] == "stdio"
     assert config["basic-memory"]["args"] == [
         "basic-memory",
@@ -17,6 +20,18 @@ def test_default_example_config_contains_only_basic_memory_server():
         "--project",
         "easy-claw",
     ]
+    assert config["git"]["transport"] == "stdio"
+    assert config["git"]["args"] == [
+        "mcp-server-git",
+        "--repository",
+        ".",
+    ]
+    assert config["github"]["transport"] == "http"
+    assert config["github"]["url"] == "https://api.githubcopilot.com/mcp/"
+    assert config["github"]["headers"]["Authorization"] == "Bearer ghp_test"
+    assert config["amap-maps"]["transport"] == "stdio"
+    assert config["amap-maps"]["args"] == ["-y", "@amap/amap-maps-mcp-server"]
+    assert config["amap-maps"]["env"]["AMAP_MAPS_API_KEY"] == "amap_test"
 
 
 class TestBuildMcpToolsDisabled:
@@ -77,6 +92,37 @@ class TestBuildMcpToolsConfigErrors:
         assert bundle.tools == []
         assert bundle.cleanup == ()
         assert bundle.interrupt_on == {}
+
+    def test_auto_skips_server_when_required_environment_variable_is_missing(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.delenv("TOKEN", raising=False)
+        config_file = tmp_path / "servers.json"
+        config_file.write_text(
+            '{"plain": {"command": "echo", "args": ["ok"], "transport": "stdio"}, '
+            '"secret": {"command": "echo", "args": ["${TOKEN}"], "transport": "stdio"}}'
+        )
+
+        with pytest.warns(RuntimeWarning, match="缺少环境变量 TOKEN"):
+            config = _read_servers_config(config_file, auto_mode=True)
+
+        assert set(config) == {"plain"}
+
+    def test_enabled_raises_when_required_environment_variable_is_missing(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        monkeypatch.delenv("TOKEN", raising=False)
+        config_file = tmp_path / "servers.json"
+        config_file.write_text(
+            '{"secret": {"command": "echo", "args": ["${TOKEN}"], "transport": "stdio"}}'
+        )
+
+        with pytest.raises(ToolExecutionError, match="缺少环境变量 TOKEN"):
+            _read_servers_config(config_file, auto_mode=False)
 
 
 class TestBuildMcpToolsSuccess:

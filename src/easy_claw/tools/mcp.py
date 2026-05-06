@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import warnings
 from pathlib import Path
 
@@ -11,6 +13,8 @@ try:
     from langchain_mcp_adapters.client import MultiServerMCPClient
 except ImportError:  # pragma: no cover
     MultiServerMCPClient = None
+
+_ENV_REF_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
 def build_mcp_tools(*, enabled: bool | str, config_path: str) -> ToolBundle:
@@ -118,7 +122,23 @@ def _read_servers_config(config_file: Path, *, auto_mode: bool) -> dict[str, dic
             raise ToolExecutionError(
                 f"MCP 配置文件 '{config_file}' 中的服务 '{name}' 必须是 JSON 对象。"
             )
-        servers_config[name] = server_config
+
+        missing_env: set[str] = set()
+        expanded_config = _expand_env_refs(server_config, missing_env)
+        if missing_env:
+            env_names = ", ".join(sorted(missing_env))
+            if auto_mode:
+                warnings.warn(
+                    f"MCP auto 模式已跳过服务 '{name}'：缺少环境变量 {env_names}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                continue
+            raise ToolExecutionError(
+                f"MCP 配置文件 '{config_file}' 中的服务 '{name}' 缺少环境变量 {env_names}。"
+            )
+
+        servers_config[name] = expanded_config
 
     if not servers_config:
         if auto_mode:
@@ -129,6 +149,28 @@ def _read_servers_config(config_file: Path, *, auto_mode: bool) -> dict[str, dic
         )
 
     return servers_config
+
+
+def _expand_env_refs(value, missing_env: set[str]):
+    if isinstance(value, str):
+        return _ENV_REF_PATTERN.sub(lambda match: _replace_env_ref(match, missing_env), value)
+
+    if isinstance(value, list):
+        return [_expand_env_refs(item, missing_env) for item in value]
+
+    if isinstance(value, dict):
+        return {key: _expand_env_refs(item, missing_env) for key, item in value.items()}
+
+    return value
+
+
+def _replace_env_ref(match: re.Match[str], missing_env: set[str]) -> str:
+    name = match.group(1)
+    value = os.environ.get(name)
+    if value is None or value == "":
+        missing_env.add(name)
+        return match.group(0)
+    return value
 
 
 def _warn_auto_disabled(reason: str) -> None:
