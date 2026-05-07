@@ -6,6 +6,7 @@ from typer.testing import CliRunner
 
 from easy_claw.agent.runtime import AgentResult, StreamEvent
 from easy_claw.cli import app
+from easy_claw.skills import SkillSource
 from easy_claw.storage.repositories import AuditRepository
 from easy_claw.tools.commands import CommandResult
 from easy_claw.tools.search import SearchResult
@@ -30,6 +31,41 @@ def test_chat_dry_run_uses_fake_runtime():
 
     assert result.exit_code == 0
     assert "easy-claw dry-run 测试：hello" in result.stdout
+
+
+def test_chat_passes_resolved_skill_source_records(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
+    source_root = tmp_path / ".easy-claw" / "skills"
+    source_root.mkdir(parents=True)
+    source = SkillSource(
+        scope="project",
+        label="project easy-claw",
+        filesystem_path=source_root,
+        backend_path="/.easy-claw/skills/",
+        skill_count=1,
+    )
+    captured_requests = []
+
+    class FakeRuntime:
+        def run(self, request):
+            captured_requests.append(request)
+            return AgentResult(content="done", thread_id=request.thread_id)
+
+    def fake_resolve_skill_sources(*, app_root, workspace_root, home_dir=None):
+        assert app_root == tmp_path
+        assert workspace_root == tmp_path
+        return [source]
+
+    monkeypatch.setattr("easy_claw.cli.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.resolve_skill_sources", fake_resolve_skill_sources)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["chat", "hello"])
+
+    assert result.exit_code == 0
+    assert captured_requests[0].skill_sources == ()
+    assert captured_requests[0].skill_source_records == [source]
 
 
 def test_chat_without_model_reports_configuration_error(tmp_path, monkeypatch):
@@ -261,6 +297,30 @@ def test_dev_tools_python_prints_output(tmp_path, monkeypatch):
         log.event_type for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
     ]
     assert "python_run" in events
+
+
+def test_dev_skills_list_all_sources_prints_resolved_sources(tmp_path, monkeypatch):
+    source_root = tmp_path / ".easy-claw" / "skills"
+    source_root.mkdir(parents=True)
+    source = SkillSource(
+        scope="project",
+        label="project easy-claw",
+        filesystem_path=source_root,
+        backend_path="/.easy-claw/skills/",
+        skill_count=1,
+    )
+
+    def fake_resolve_skill_sources(*, app_root, workspace_root, home_dir=None):
+        return [source]
+
+    monkeypatch.setattr("easy_claw.cli.resolve_skill_sources", fake_resolve_skill_sources)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["dev", "skills", "list", "--all-sources"])
+
+    assert result.exit_code == 0
+    assert "project easy-claw" in result.stdout
+    assert "/.easy-claw/skills/" in result.stdout
 
 
 def test_startup_banner_shows_mcp_status(tmp_path, monkeypatch):

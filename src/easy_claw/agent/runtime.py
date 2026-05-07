@@ -11,6 +11,7 @@ from easy_claw.agent.middleware import build_agent_middleware
 from easy_claw.agent.toolset import build_easy_claw_tools
 from easy_claw.agent.types import ToolContext
 from easy_claw.config import AppConfig
+from easy_claw.skills import SkillSource
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,7 @@ class AgentRequest:
     config: AppConfig | None
     workspace_path: Path | None = None
     skill_sources: Sequence[str] = field(default_factory=tuple)
+    skill_source_records: Sequence[SkillSource] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
@@ -116,8 +118,9 @@ class DeepAgentsRuntime:
         workspace_path = request.workspace_path or cfg.default_workspace
 
         from deepagents import create_deep_agent
-        from deepagents.backends import LocalShellBackend
         from langgraph.checkpoint.sqlite import SqliteSaver
+
+        skill_sources = _request_skill_source_paths(request)
 
         tool_bundle = build_easy_claw_tools(
             ToolContext(
@@ -140,12 +143,12 @@ class DeepAgentsRuntime:
             model=_build_chat_model(cfg.model, cfg.base_url, cfg.api_key),
             tools=tool_bundle.tools,
             system_prompt=system_prompt,
-            skills=list(request.skill_sources) or None,
+            skills=skill_sources or None,
             middleware=build_agent_middleware(
                 max_model_calls=cfg.max_model_calls,
                 max_tool_calls=cfg.max_tool_calls,
             ),
-            backend=LocalShellBackend(root_dir=workspace_path, virtual_mode=True),
+            backend=_build_agent_backend(workspace_path, request.skill_source_records),
             checkpointer=checkpointer,
             interrupt_on=interrupt_on,
         )
@@ -214,6 +217,46 @@ def _build_chat_model(model: str, base_url: str, api_key: str) -> object:
         api_key=api_key,
         base_url=base_url,
     )
+
+
+def _request_skill_source_paths(request: AgentRequest) -> list[str]:
+    paths: list[str] = []
+    for source in request.skill_sources:
+        if source not in paths:
+            paths.append(source)
+    for source in request.skill_source_records:
+        if source.backend_path not in paths:
+            paths.append(source.backend_path)
+    return paths
+
+
+def _build_agent_backend(
+    workspace_path: Path,
+    skill_source_records: Sequence[SkillSource],
+) -> object:
+    from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
+
+    workspace = workspace_path.expanduser().resolve(strict=False)
+    default_backend = LocalShellBackend(root_dir=workspace, virtual_mode=True)
+    routes = {}
+    for source in skill_source_records:
+        if _is_under_workspace(source.filesystem_path, workspace):
+            continue
+        routes[source.backend_path] = FilesystemBackend(
+            root_dir=source.filesystem_path,
+            virtual_mode=True,
+        )
+    if not routes:
+        return default_backend
+    return CompositeBackend(default=default_backend, routes=routes)
+
+
+def _is_under_workspace(path: Path, workspace: Path) -> bool:
+    try:
+        path.expanduser().resolve(strict=False).relative_to(workspace)
+    except ValueError:
+        return False
+    return True
 
 
 def _build_interrupt_on(

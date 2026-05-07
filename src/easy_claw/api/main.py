@@ -16,7 +16,7 @@ from easy_claw.agent.runtime import (
     StreamEvent,
 )
 from easy_claw.config import AppConfig, load_config
-from easy_claw.skills import discover_skill_sources
+from easy_claw.skills import resolve_skill_sources
 from easy_claw.storage.db import initialize_product_db
 from easy_claw.storage.repositories import SessionRepository
 
@@ -104,7 +104,10 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             title="网页聊天",
         )
 
-        skill_sources = discover_skill_sources(config.cwd / "skills", config.default_workspace)
+        skill_source_records = resolve_skill_sources(
+            app_root=config.cwd,
+            workspace_root=config.default_workspace,
+        )
         runtime = DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True))
 
         await websocket.send_json(
@@ -122,7 +125,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 prompt="",
                 thread_id=session.id,
                 config=config,
-                skill_sources=skill_sources,
+                skill_source_records=skill_source_records,
             )
         )
 

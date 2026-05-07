@@ -18,6 +18,7 @@ from easy_claw.agent.runtime import (
     _invoke_with_approval,
 )
 from easy_claw.config import AppConfig
+from easy_claw.skills import SkillSource
 
 
 def _test_config(*, tmp_path: Path, **kwargs: object) -> AppConfig:
@@ -201,6 +202,79 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
         "run_python",
         "read_document",
     }
+
+
+def test_deepagents_runtime_routes_external_skill_sources(tmp_path, monkeypatch):
+    captured = {}
+    external_source = tmp_path / "external" / "skills"
+    workspace = tmp_path / "workspace"
+    external_source.mkdir(parents=True)
+    workspace.mkdir()
+
+    class FakeLocalShellBackend:
+        def __init__(self, *, root_dir, virtual_mode):
+            self.root_dir = root_dir
+            self.virtual_mode = virtual_mode
+
+    class FakeFilesystemBackend:
+        def __init__(self, *, root_dir, virtual_mode):
+            self.root_dir = root_dir
+            self.virtual_mode = virtual_mode
+
+    class FakeCompositeBackend:
+        def __init__(self, *, default, routes):
+            captured["default_backend"] = default
+            captured["routes"] = routes
+
+    class FakeDeepAgent:
+        def invoke(self, input_value, config):
+            return {"messages": [{"role": "assistant", "content": "done"}]}
+
+    def fake_create_deep_agent(**kwargs):
+        captured.update(kwargs)
+        return FakeDeepAgent()
+
+    monkeypatch.setattr(
+        "easy_claw.agent.runtime._build_chat_model",
+        lambda model, base_url, api_key: "chat-model",
+    )
+    monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
+    monkeypatch.setattr("deepagents.backends.LocalShellBackend", FakeLocalShellBackend)
+    monkeypatch.setattr("deepagents.backends.FilesystemBackend", FakeFilesystemBackend)
+    monkeypatch.setattr("deepagents.backends.CompositeBackend", FakeCompositeBackend)
+
+    config = _test_config(
+        tmp_path=tmp_path,
+        default_workspace=workspace,
+        checkpoint_db_path=tmp_path / "checkpoints.sqlite",
+    )
+    source = SkillSource(
+        scope="user",
+        label="user easy-claw",
+        filesystem_path=external_source,
+        backend_path="/easy-claw/skill-sources/external-skills/",
+        skill_count=1,
+    )
+
+    result = DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True)).run(
+        AgentRequest(
+            prompt="hello",
+            thread_id="thread-1",
+            config=config,
+            skill_source_records=[source],
+        )
+    )
+
+    assert result.content == "done"
+    assert captured["skills"] == ["/easy-claw/skill-sources/external-skills/"]
+    assert isinstance(captured["backend"], FakeCompositeBackend)
+    assert isinstance(captured["default_backend"], FakeLocalShellBackend)
+    assert captured["default_backend"].root_dir == workspace
+    assert captured["default_backend"].virtual_mode is True
+    route_backend = captured["routes"]["/easy-claw/skill-sources/external-skills/"]
+    assert isinstance(route_backend, FakeFilesystemBackend)
+    assert route_backend.root_dir == external_source
+    assert route_backend.virtual_mode is True
 
 
 def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkeypatch):

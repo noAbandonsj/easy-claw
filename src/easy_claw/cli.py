@@ -23,7 +23,7 @@ from easy_claw.agent.runtime import (
     StreamEvent,
 )
 from easy_claw.config import AppConfig, load_config
-from easy_claw.skills import discover_skill_sources, discover_skills
+from easy_claw.skills import SkillSource, discover_skills, resolve_skill_sources
 from easy_claw.storage.db import initialize_product_db
 from easy_claw.storage.repositories import AuditRepository, SessionRecord, SessionRepository
 from easy_claw.tools.base import ToolExecutionError
@@ -219,8 +219,35 @@ def _delete_checkpoint_thread(thread_id: str, checkpoint_db_path: Path) -> None:
 @skills_app.command("list")
 def list_skills(
     skills_root: Annotated[Path, typer.Option("--skills-root")] = DEFAULT_SKILLS_ROOT,
+    all_sources: Annotated[
+        bool,
+        typer.Option("--all-sources", help="显示当前会话会自动收集的所有 skill 来源。"),
+    ] = False,
+    workspace: Annotated[
+        Path | None,
+        typer.Option("--workspace", help="用于解析项目级 skill 的工作区。"),
+    ] = None,
 ) -> None:
     """列出可用 Markdown 技能。"""
+    if all_sources:
+        config = load_config()
+        workspace_root = workspace or config.default_workspace
+        sources = resolve_skill_sources(app_root=config.cwd, workspace_root=workspace_root)
+        console.out("scope\tlabel\tskill_count\tbackend_path\tfilesystem_path")
+        for source in sources:
+            console.out(
+                "\t".join(
+                    [
+                        source.scope,
+                        source.label,
+                        str(source.skill_count),
+                        source.backend_path,
+                        str(source.filesystem_path),
+                    ]
+                )
+            )
+        return
+
     skills = discover_skills(skills_root)
     table = Table("名称", "说明", "路径")
     for skill in skills:
@@ -282,13 +309,13 @@ def chat(
         model=config.model,
         title=prompt[:60] or "聊天",
     )
-    skill_sources = discover_skill_sources(config.cwd / "skills", config.default_workspace)
+    skill_source_records = _resolve_skill_source_records(config)
     result = DeepAgentsRuntime().run(
         AgentRequest(
             prompt=prompt,
             thread_id=session.id,
             config=config,
-            skill_sources=skill_sources,
+            skill_source_records=skill_source_records,
         )
     )
     audit_repo.record(
@@ -331,7 +358,6 @@ def _run_interactive_chat(
 
     initialize_product_db(config.product_db_path)
     audit_repo = AuditRepository(config.product_db_path)
-    skill_sources = discover_skill_sources(config.cwd / "skills", config.default_workspace)
     runtime = DeepAgentsRuntime()
     conversation: list[tuple[str, str]] = []
     token_usage: dict[str, int] = {}
@@ -355,7 +381,7 @@ def _run_interactive_chat(
             prompt="",
             thread_id=thread_id,
             config=config,
-            skill_sources=skill_sources,
+            skill_source_records=_resolve_skill_source_records(config),
         )
 
         if open_session is None:
@@ -497,6 +523,10 @@ def _run_interactive_loop(
 
 def _agent_request_for_prompt(request: AgentRequest, prompt: str) -> AgentRequest:
     return dataclasses.replace(request, prompt=prompt)
+
+
+def _resolve_skill_source_records(config: AppConfig) -> list[SkillSource]:
+    return resolve_skill_sources(app_root=config.cwd, workspace_root=config.default_workspace)
 
 
 @tools_app.command("search")

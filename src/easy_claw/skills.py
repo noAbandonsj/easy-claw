@@ -12,6 +12,15 @@ class Skill:
     body: str
 
 
+@dataclass(frozen=True)
+class SkillSource:
+    scope: str
+    label: str
+    filesystem_path: Path
+    backend_path: str
+    skill_count: int
+
+
 def _split_frontmatter(text: str) -> tuple[dict[str, str], str]:
     if not text.startswith("---"):
         return {}, text
@@ -74,3 +83,110 @@ def discover_skill_sources(skills_root: Path, workspace_root: Path) -> list[str]
             source += "/"
         sources.append(source)
     return sources
+
+
+def resolve_skill_sources(
+    *,
+    app_root: Path,
+    workspace_root: Path,
+    home_dir: Path | None = None,
+) -> list[SkillSource]:
+    """Resolve complete DeepAgents skill source directories.
+
+    The returned sources are ordered from low to high priority. Each source path
+    is a directory that contains one or more child skill directories with
+    ``SKILL.md`` files; helper files next to ``SKILL.md`` remain available to the
+    DeepAgents skill middleware.
+    """
+    app = app_root.expanduser().resolve(strict=False)
+    workspace = workspace_root.expanduser().resolve(strict=False)
+    home = (home_dir or Path.home()).expanduser().resolve(strict=False)
+
+    candidates = [
+        ("builtin", "easy-claw built-in", app / "skills"),
+        ("user", "user deepagents", home / ".deepagents" / "skills"),
+        ("user", "user deepagents agent", home / ".deepagents" / "agent" / "skills"),
+        ("user", "user agents", home / ".agents" / "skills"),
+        ("user", "user easy-claw", home / ".easy-claw" / "skills"),
+        ("user", "user claude", home / ".claude" / "skills"),
+        ("project", "project deepagents", workspace / ".deepagents" / "skills"),
+        ("project", "project agents", workspace / ".agents" / "skills"),
+        ("project", "project easy-claw", workspace / ".easy-claw" / "skills"),
+        ("project", "project skills", workspace / "skills"),
+    ]
+
+    sources: list[SkillSource] = []
+    seen_paths: set[Path] = set()
+    for scope, label, root in candidates:
+        resolved_root = root.expanduser().resolve(strict=False)
+        if resolved_root in seen_paths:
+            continue
+        source_dirs = _discover_source_dirs(resolved_root)
+        if not source_dirs:
+            continue
+        for source_dir in source_dirs:
+            resolved_source = source_dir.resolve(strict=False)
+            if resolved_source in seen_paths:
+                continue
+            seen_paths.add(resolved_source)
+            sources.append(
+                SkillSource(
+                    scope=scope,
+                    label=label,
+                    filesystem_path=resolved_source,
+                    backend_path=_backend_source_path(resolved_source, workspace),
+                    skill_count=_count_direct_skill_dirs(resolved_source),
+                )
+            )
+    return sources
+
+
+def resolve_deepagents_skill_source_paths(
+    *,
+    app_root: Path,
+    workspace_root: Path,
+    home_dir: Path | None = None,
+) -> list[str]:
+    """Return backend source paths suitable for ``create_deep_agent(skills=...)``."""
+    return [
+        source.backend_path
+        for source in resolve_skill_sources(
+            app_root=app_root,
+            workspace_root=workspace_root,
+            home_dir=home_dir,
+        )
+    ]
+
+
+def _discover_source_dirs(skills_root: Path) -> list[Path]:
+    if not skills_root.exists():
+        return []
+    source_dirs: set[Path] = set()
+    for skill_path in skills_root.rglob("SKILL.md"):
+        if skill_path.is_file():
+            source_dirs.add(skill_path.parent.parent.resolve(strict=False))
+    return sorted(source_dirs)
+
+
+def _count_direct_skill_dirs(source_dir: Path) -> int:
+    if not source_dir.exists():
+        return 0
+    return sum(1 for child in source_dir.iterdir() if (child / "SKILL.md").is_file())
+
+
+def _backend_source_path(source_dir: Path, workspace_root: Path) -> str:
+    try:
+        relative = source_dir.relative_to(workspace_root)
+        source = "/" + relative.as_posix().strip("/")
+    except ValueError:
+        source = "/easy-claw/skill-sources/" + _source_path_slug(source_dir)
+    if not source.endswith("/"):
+        source += "/"
+    return source
+
+
+def _source_path_slug(path: Path) -> str:
+    raw = path.as_posix().strip("/").replace(":", "")
+    parts = [part for part in raw.split("/") if part]
+    slug = "-".join(parts[-4:]) if parts else "skills"
+    return slug
