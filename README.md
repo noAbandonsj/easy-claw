@@ -95,6 +95,11 @@ uv run easy-claw doctor
 | `uv run easy-claw chat --dry-run "你好"` | 不调用模型，只测试命令链路 |
 | `uv run easy-claw init-db` | 初始化本地数据库 |
 | `uv run easy-claw doctor` | 打印当前环境诊断信息 |
+| `uv run easy-claw list-sessions` | 列出历史聊天会话 |
+| `uv run easy-claw resume-session <会话ID>` | 恢复已有聊天会话，输入前 8 位即可 |
+| `uv run easy-claw delete-session <会话ID>` | 删除聊天会话及其检查点 |
+
+会话命令也保留分组写法：`uv run easy-claw sessions list`、`uv run easy-claw sessions resume <会话ID>`、`uv run easy-claw sessions delete <会话ID>`。
 
 开发者调试命令：
 

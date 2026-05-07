@@ -128,6 +128,7 @@ def init_db() -> None:
     console.print(f"已初始化 {config.product_db_path}")
 
 
+@app.command("list-sessions", rich_help_panel="管理")
 @sessions_app.command("list")
 def list_sessions() -> None:
     """列出历史聊天会话。"""
@@ -144,6 +145,7 @@ def list_sessions() -> None:
     console.print(table)
 
 
+@app.command("resume-session", rich_help_panel="管理")
 @sessions_app.command("resume")
 def resume_session(
     session_id: Annotated[str, typer.Argument(help="会话 ID，输入前 8 位即可")],
@@ -165,6 +167,7 @@ def resume_session(
     _run_interactive_chat(dry_run=False, config=config, resume_thread_id=matched.id)
 
 
+@app.command("delete-session", rich_help_panel="管理")
 @sessions_app.command("delete")
 def delete_session(
     session_id: Annotated[str, typer.Argument(help="会话 ID，输入前 8 位即可")],

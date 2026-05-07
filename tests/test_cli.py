@@ -168,6 +168,17 @@ def test_top_level_developer_command_aliases_are_removed():
     assert runner.invoke(app, ["skills", "list"]).exit_code != 0
 
 
+def test_top_level_session_aliases_are_visible_in_help():
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["--help"])
+
+    assert result.exit_code == 0
+    assert "list-sessions" in result.stdout
+    assert "resume-session" in result.stdout
+    assert "delete-session" in result.stdout
+
+
 def test_dev_tools_search_prints_results(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
