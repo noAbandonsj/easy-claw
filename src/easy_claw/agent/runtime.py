@@ -290,14 +290,7 @@ def _extract_last_message_info(result: object) -> tuple[str, dict[str, int] | No
     if content is None and isinstance(last_message, dict):
         content = last_message.get("content")
 
-    usage = None
-    usage_meta = getattr(last_message, "usage_metadata", None)
-    if isinstance(usage_meta, dict):
-        usage = {
-            "input": usage_meta.get("input_tokens", 0),
-            "output": usage_meta.get("output_tokens", 0),
-            "total": usage_meta.get("total_tokens", 0),
-        }
+    usage = _usage_from_message(last_message)
     return str(content or ""), usage
 
 
@@ -343,13 +336,9 @@ def _stream_with_approval(
                 break
 
             msg = _message_from_stream_item(stream_item)
-            msg_usage = getattr(msg, "usage_metadata", None)
-            if isinstance(msg_usage, dict):
-                usage = {
-                    "input": msg_usage.get("input_tokens", 0),
-                    "output": msg_usage.get("output_tokens", 0),
-                    "total": msg_usage.get("total_tokens", 0),
-                }
+            msg_usage = _usage_from_message(msg)
+            if msg_usage is not None:
+                usage = msg_usage
 
             for event in _events_from_stream_item(stream_item, thread_id=thread_id):
                 if event.type == "token":
@@ -382,6 +371,48 @@ def _message_from_stream_item(stream_item: object) -> object:
     if isinstance(stream_item, tuple):
         return stream_item[0]
     return stream_item
+
+
+def _usage_from_message(message: object) -> dict[str, int] | None:
+    usage_metadata = _read_field(message, "usage_metadata")
+    usage = _normalize_usage_metadata(usage_metadata)
+    if usage is not None:
+        return usage
+
+    response_metadata = _read_field(message, "response_metadata")
+    if isinstance(response_metadata, dict):
+        usage = _normalize_usage_metadata(response_metadata.get("token_usage"))
+        if usage is not None:
+            return usage
+        return _normalize_usage_metadata(response_metadata.get("usage"))
+    return None
+
+
+def _normalize_usage_metadata(value: object) -> dict[str, int] | None:
+    if not isinstance(value, dict):
+        return None
+
+    input_tokens = _first_int(value, "input_tokens", "prompt_tokens", "input")
+    output_tokens = _first_int(value, "output_tokens", "completion_tokens", "output")
+    total_tokens = _first_int(value, "total_tokens", "total")
+    if input_tokens is None and output_tokens is None and total_tokens is None:
+        return None
+
+    input_count = input_tokens or 0
+    output_count = output_tokens or 0
+    return {
+        "input": input_count,
+        "output": output_count,
+        "total": total_tokens if total_tokens is not None else input_count + output_count,
+    }
+
+
+def _first_int(value: dict[str, object], *keys: str) -> int | None:
+    for key in keys:
+        raw = value.get(key)
+        if isinstance(raw, int):
+            return raw
+    return None
 
 
 def _text_from_message(message: object) -> str:

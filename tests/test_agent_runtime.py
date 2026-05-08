@@ -402,6 +402,12 @@ class FakeStreamMessage:
     content: str
 
 
+@dataclass
+class FakeStreamMessageWithResponseUsage:
+    content: str
+    response_metadata: dict[str, object]
+
+
 class FakeStreamingAgent:
     def __init__(self):
         self.inputs = []
@@ -442,6 +448,38 @@ def test_deepagent_session_stream_yields_tokens_and_done():
     ]
     assert agent.inputs == [{"messages": [{"role": "user", "content": "say hello"}]}]
     assert agent.stream_modes == ["messages"]
+
+
+class FakeStreamingUsageAgent:
+    def stream(self, input_value, config, stream_mode):
+        yield FakeStreamMessageWithResponseUsage(
+            "hello",
+            {
+                "token_usage": {
+                    "prompt_tokens": 12,
+                    "completion_tokens": 3,
+                    "total_tokens": 15,
+                }
+            },
+        )
+
+
+def test_deepagent_session_stream_extracts_response_metadata_token_usage():
+    session = DeepAgentSession(
+        agent=FakeStreamingUsageAgent(),
+        thread_id="thread-1",
+        reviewer=StaticApprovalReviewer(approve=True),
+        exit_stack=ExitStack(),
+    )
+
+    events = list(session.stream("say hello"))
+
+    assert events[-1] == StreamEvent(
+        type="done",
+        content="hello",
+        thread_id="thread-1",
+        usage={"input": 12, "output": 3, "total": 15},
+    )
 
 
 @dataclass

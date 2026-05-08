@@ -343,6 +343,73 @@ def test_interactive_status_shows_capability_summary(tmp_path, monkeypatch):
     assert "工具调用上限" in result.stdout
 
 
+def test_interactive_status_shows_accumulated_token_usage(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
+
+    class FakeRuntime:
+        def run(self, request):
+            return AgentResult(
+                content=f"answer: {request.prompt}",
+                thread_id=request.thread_id,
+                usage={"input": 1234, "output": 56, "total": 1290},
+            )
+
+    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["chat", "--interactive"], input="hello\n/status\nexit\n")
+
+    assert result.exit_code == 0
+    assert "输入 token" in result.stdout
+    assert "1,234" in result.stdout
+    assert "输出 token" in result.stdout
+    assert "56" in result.stdout
+    assert "总 token" in result.stdout
+    assert "1,290" in result.stdout
+
+
+def test_interactive_status_shows_streamed_token_usage(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
+
+    class FakeStreamingSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            pass
+
+        def run(self, prompt):
+            raise AssertionError("interactive chat should prefer stream()")
+
+        def stream(self, prompt):
+            yield StreamEvent(type="token", content=f"stream: {prompt}")
+            yield StreamEvent(
+                type="done",
+                content=f"stream: {prompt}",
+                thread_id="thread-1",
+                usage={"input": 20, "output": 4, "total": 24},
+            )
+
+    class FakeRuntime:
+        def open_session(self, request):
+            return FakeStreamingSession()
+
+    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["chat", "--interactive"], input="hello\n/status\nexit\n")
+
+    assert result.exit_code == 0
+    assert "输入 token" in result.stdout
+    assert "20" in result.stdout
+    assert "输出 token" in result.stdout
+    assert "4" in result.stdout
+    assert "总 token" in result.stdout
+    assert "24" in result.stdout
+
+
 def test_interactive_skills_slash_command_prints_resolved_sources(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
