@@ -316,13 +316,18 @@ Basic Memory 的长期记忆保存在 `data\basic-memory`，由 Basic Memory MCP
 ```text
 GET  /
 GET  /health
+GET  /slash-commands
+GET  /skills
+GET  /mcp
+GET  /browser
 GET  /sessions
 POST /sessions
+GET  /sessions/resolve/{session_id}
 GET  /sessions/{session_id}
 WS   /ws/chat
 ```
 
-HTTP API 用于健康检查和会话管理。本地 Web 聊天页面通过 `/ws/chat` 建立 WebSocket 连接，服务端复用 `DeepAgentSession.stream()` 把 token、工具调用和工具结果转发给前端。CLI 交互式聊天仍是默认入口。
+HTTP API 用于健康检查、能力状态和会话管理。`/slash-commands` 从 CLI slash registry 暴露同一份命令定义，Web `/help` 基于该接口渲染。本地 Web 聊天页面通过 `/ws/chat` 建立 WebSocket 连接，服务端复用 `DeepAgentSession.stream()` 把 token、工具调用和工具结果转发给前端。CLI 交互式聊天仍是默认入口。
 
 ## 6. Windows 部署设计
 

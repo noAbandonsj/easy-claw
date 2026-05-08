@@ -47,6 +47,28 @@ class SlashCommand:
     aliases: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class SlashCommandSpec:
+    name: str
+    usage: str
+    description: str
+    group: str
+    aliases: list[str]
+
+
+def get_slash_command_specs() -> list[SlashCommandSpec]:
+    return [
+        SlashCommandSpec(
+            name=command.name,
+            usage=command.usage,
+            description=command.description,
+            group=command.group,
+            aliases=list(command.aliases),
+        )
+        for command in _SLASH_COMMANDS
+    ]
+
+
 def _dispatch_interactive_command(
     prompt: str,
     context: SlashCommandContext,

@@ -239,7 +239,6 @@ body {
 </div>
 
 <script>
-const WS_URL = 'ws://' + location.host + '/ws/chat';
 const msgEl = document.getElementById('messages');
 const inputEl = document.getElementById('input');
 const sendBtn = document.getElementById('send-btn');
@@ -257,25 +256,45 @@ let version = '';
 let sessionId = '';
 let turnCount = 0;
 let totalTokens = {};
+let slashCommands = null;
 
-function connect() {
-    ws = new WebSocket(WS_URL);
-    ws.onopen = () => {
+function buildWsUrl(resumeSessionId) {
+    let url = 'ws://' + location.host + '/ws/chat';
+    if (resumeSessionId) {
+        url += '?session_id=' + encodeURIComponent(resumeSessionId);
+    }
+    return url;
+}
+
+function connect(resumeSessionId) {
+    const socket = new WebSocket(buildWsUrl(resumeSessionId));
+    ws = socket;
+    socket.onopen = () => {
         dotEl.classList.remove('disconnected');
         inputEl.disabled = false;
         sendBtn.disabled = false;
     };
-    ws.onclose = () => {
+    socket.onclose = () => {
+        if (socket !== ws) return;
         dotEl.classList.add('disconnected');
         inputEl.disabled = true;
         sendBtn.disabled = true;
         statusEl.textContent = '连接已断开，2 秒后重连...';
-        setTimeout(connect, 2000);
+        setTimeout(() => connect(resumeSessionId), 2000);
     };
-    ws.onmessage = (e) => {
+    socket.onmessage = (e) => {
         const msg = JSON.parse(e.data);
         handleMessage(msg);
     };
+}
+
+function disconnect() {
+    const socket = ws;
+    ws = null;
+    dotEl.classList.add('disconnected');
+    inputEl.disabled = true;
+    sendBtn.disabled = true;
+    if (socket && socket.readyState !== WebSocket.CLOSED) socket.close();
 }
 
 function handleMessage(msg) {
@@ -361,7 +380,7 @@ function formatContent(val) {
 }
 
 function escapeHtml(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function scrollBottom() {
@@ -371,9 +390,11 @@ function scrollBottom() {
 function send() {
     const text = inputEl.value;
     if (!text.trim() || !ws || ws.readyState !== WebSocket.OPEN) return;
+    const trimmed = text.trim();
+    const lowered = trimmed.toLowerCase();
 
-    if (text.startsWith('/')) {
-        handleSlash(text.trim());
+    if (trimmed.startsWith('/') || ['exit', 'quit', ':q'].includes(lowered)) {
+        handleSlash(trimmed);
         inputEl.value = '';
         return;
     }
@@ -390,20 +411,35 @@ function send() {
     statusEl.textContent = '思考中...';
 }
 
-function handleSlash(cmd) {
-    switch (cmd) {
+async function loadSlashCommands() {
+    if (slashCommands) return slashCommands;
+    const response = await fetch('/slash-commands');
+    if (!response.ok) throw new Error('无法加载命令列表');
+    slashCommands = await response.json();
+    return slashCommands;
+}
+
+async function fetchJson(path) {
+    const response = await fetch(path);
+    if (!response.ok) {
+        let detail = response.statusText;
+        try {
+            const payload = await response.json();
+            detail = payload.detail || detail;
+        } catch (e) {}
+        throw new Error(detail);
+    }
+    return response.json();
+}
+
+async function handleSlash(cmd) {
+    const parts = cmd.trim().split(/\s+/);
+    const token = parts[0].toLowerCase();
+    const args = parts.slice(1).join(' ');
+    try {
+        switch (token) {
         case '/help':
-            showModal(
-                '<h2>命令</h2>' +
-                '<table>' +
-                '<tr><td>/help</td><td>显示帮助</td></tr>' +
-                '<tr><td>/clear</td><td>清空当前对话视图</td></tr>' +
-                '<tr><td>/status</td><td>显示会话信息</td></tr>' +
-                '<tr><td>/save</td><td>下载 Markdown 对话记录</td></tr>' +
-                '<tr><td>exit, quit</td><td>断开连接</td></tr>' +
-                '</table>' +
-                '<p style="margin-top:12px;font-size:13px;color:var(--dim)">/workspace 切换仅在 CLI 模式可用。</p>'
-            );
+            await showCommandHelp(args);
             break;
         case '/clear':
             msgEl.innerHTML = '';
@@ -413,10 +449,10 @@ function handleSlash(cmd) {
             showModal(
                 '<h2>会话状态</h2>' +
                 '<table>' +
-                '<tr><td>模型</td><td>' + modelName + '</td></tr>' +
-                '<tr><td>工作区</td><td>' + workspace + '</td></tr>' +
-                '<tr><td>版本</td><td>' + version + '</td></tr>' +
-                '<tr><td>会话</td><td>' + sessionId + '</td></tr>' +
+                '<tr><td>模型</td><td>' + escapeHtml(modelName) + '</td></tr>' +
+                '<tr><td>工作区</td><td>' + escapeHtml(workspace) + '</td></tr>' +
+                '<tr><td>版本</td><td>' + escapeHtml(version) + '</td></tr>' +
+                '<tr><td>会话</td><td>' + escapeHtml(sessionId) + '</td></tr>' +
                 '<tr><td>轮次</td><td>' + turnCount + '</td></tr>' +
                 '<tr><td>Token</td><td>' + (totalTokens.total || 0).toLocaleString() + '</td></tr>' +
                 '</table>'
@@ -425,13 +461,146 @@ function handleSlash(cmd) {
         case '/save':
             downloadMarkdown();
             break;
+        case '/skills':
+            await showSkills();
+            break;
+        case '/mcp':
+            await showMcp();
+            break;
+        case '/browser':
+            await showBrowser();
+            break;
+        case '/sessions':
+            await showSessions();
+            break;
+        case '/resume':
+            await resumeSession(args);
+            break;
+        case '/exit':
+        case '/quit':
+        case 'exit':
+        case 'quit':
+        case ':q':
+            statusEl.textContent = '已断开连接';
+            disconnect();
+            break;
         default:
-            if (cmd.startsWith('/workspace')) {
-                statusEl.textContent = '/workspace 切换仅支持 CLI。请使用 "uv run easy-claw chat --interactive"。';
+            if (['/workspace', '/model', '/doctor', '/delete-session'].includes(token)) {
+                statusEl.textContent = token + ' 目前仅支持 CLI。请使用 uv run easy-claw。';
             } else {
                 statusEl.textContent = '未知命令：' + cmd;
             }
+        }
+    } catch (e) {
+        statusEl.textContent = '命令执行失败：' + e.message;
     }
+}
+
+async function showCommandHelp(commandName) {
+    const commands = await loadSlashCommands();
+    if (commandName) {
+        let normalized = commandName.trim().toLowerCase();
+        if (normalized && !normalized.startsWith('/') && !['exit', 'quit', ':q'].includes(normalized)) {
+            normalized = '/' + normalized;
+        }
+        const command = commands.find(c => c.name === normalized || (c.aliases || []).includes(normalized));
+        if (!command) {
+            statusEl.textContent = '未知命令：' + commandName;
+            return;
+        }
+        showModal(
+            '<h2>' + escapeHtml(command.usage) + '</h2>' +
+            '<table>' +
+            '<tr><td>类别</td><td>' + escapeHtml(command.group) + '</td></tr>' +
+            '<tr><td>说明</td><td>' + escapeHtml(command.description) + '</td></tr>' +
+            '<tr><td>别名</td><td>' + escapeHtml((command.aliases || []).join(', ') || '-') + '</td></tr>' +
+            '</table>'
+        );
+        return;
+    }
+    const rows = commands.map(c =>
+        '<tr><td>' + escapeHtml(c.usage) + '</td><td>' + escapeHtml(c.description) + '</td></tr>'
+    ).join('');
+    showModal(
+        '<h2>聊天内斜杠命令</h2>' +
+        '<table>' + rows + '</table>' +
+        '<p style="margin-top:12px;font-size:13px;color:var(--dim)">命令定义来自 CLI slash registry；部分配置类命令在网页端仅显示提示。</p>'
+    );
+}
+
+async function showSkills() {
+    const payload = await fetchJson('/skills');
+    const rows = payload.sources.map(source =>
+        '<tr><td>' + escapeHtml(source.label) + '</td><td>' +
+        escapeHtml(source.skill_count + ' 个 | ' + source.backend_path + ' | ' + source.filesystem_path) +
+        '</td></tr>'
+    ).join('');
+    showModal(
+        '<h2>Skill 来源</h2>' +
+        '<table>' + (rows || '<tr><td>无</td><td>没有找到 skill 来源</td></tr>') + '</table>' +
+        '<p style="margin-top:12px;font-size:13px;color:var(--dim)">共 ' +
+        escapeHtml(payload.source_count) + ' 个来源，' + escapeHtml(payload.skill_count) + ' 个 skill。</p>'
+    );
+}
+
+async function showMcp() {
+    const payload = await fetchJson('/mcp');
+    showModal(
+        '<h2>MCP</h2>' +
+        '<table>' +
+        '<tr><td>模式</td><td>' + escapeHtml(payload.mode) + '</td></tr>' +
+        '<tr><td>状态</td><td>' + escapeHtml(payload.status) + '</td></tr>' +
+        '<tr><td>配置</td><td>' + escapeHtml(payload.config_path) + '</td></tr>' +
+        '<tr><td>服务数</td><td>' + escapeHtml(payload.server_count) + '</td></tr>' +
+        '</table>'
+    );
+}
+
+async function showBrowser() {
+    const payload = await fetchJson('/browser');
+    showModal(
+        '<h2>浏览器工具</h2>' +
+        '<table>' +
+        '<tr><td>启用</td><td>' + yesNo(payload.enabled) + '</td></tr>' +
+        '<tr><td>无头模式</td><td>' + yesNo(payload.headless) + '</td></tr>' +
+        '<tr><td>Chromium</td><td>' + yesNo(payload.chromium_installed) + '</td></tr>' +
+        '<tr><td>Headless</td><td>' + yesNo(payload.chromium_headless_installed) + '</td></tr>' +
+        '</table>'
+    );
+}
+
+async function showSessions() {
+    const sessions = await fetchJson('/sessions');
+    const rows = sessions.map(session =>
+        '<tr><td>' + escapeHtml(session.id.slice(0, 8)) + '</td><td>' +
+        escapeHtml(session.title + ' | ' + (session.model || '-') + ' | ' + session.updated_at.slice(0, 19)) +
+        '</td></tr>'
+    ).join('');
+    showModal(
+        '<h2>历史会话</h2>' +
+        '<table>' + (rows || '<tr><td>无</td><td>没有找到会话</td></tr>') + '</table>' +
+        '<p style="margin-top:12px;font-size:13px;color:var(--dim)">使用 /resume &lt;session-id&gt; 可按前缀恢复。</p>'
+    );
+}
+
+async function resumeSession(sessionPrefix) {
+    if (!sessionPrefix) {
+        statusEl.textContent = '用法：/resume <session-id>';
+        return;
+    }
+    const session = await fetchJson('/sessions/resolve/' + encodeURIComponent(sessionPrefix));
+    const oldSocket = ws;
+    msgEl.innerHTML = '';
+    currentAssistant = null;
+    turnCount = 0;
+    totalTokens = {};
+    statusEl.textContent = '正在恢复会话 ' + session.id.slice(0, 8) + '...';
+    connect(session.id);
+    if (oldSocket && oldSocket.readyState !== WebSocket.CLOSED) oldSocket.close();
+}
+
+function yesNo(value) {
+    return value ? '是' : '否';
 }
 
 function showModal(html) {

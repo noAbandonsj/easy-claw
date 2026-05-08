@@ -146,6 +146,7 @@ uv run easy-claw doctor
 | `http://127.0.0.1:8787/sessions` | 会话列表 |
 
 注意：`/docs` 是接口文档，不是聊天界面。聊天页面在根路径 `/`，底层通过 `/ws/chat` 建立 WebSocket 连接。
+Web 聊天页的 `/help` 使用和 CLI 相同的 slash command 定义，并支持查看 `/skills`、`/mcp`、`/browser`、`/sessions`，以及用 `/resume <session-id>` 按前缀恢复会话。
 
 ---
 
