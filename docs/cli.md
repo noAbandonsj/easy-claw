@@ -80,7 +80,6 @@ uv run easy-claw --help
 | 命令 | 说明 |
 |---|---|
 | `uv run easy-claw` | 进入聊天界面 |
-| `uv run easy-claw chat --dry-run "你好"` | 不调用模型，只测试命令链路 |
 | `uv run easy-claw doctor` | 打印完整环境诊断信息 |
 | `uv run easy-claw init-db` | 初始化本地 SQLite 数据库 |
 | `uv run easy-claw serve` | 启动本地 API 和 Web 页面 |
@@ -104,4 +103,3 @@ uv run easy-claw sessions list
 uv run easy-claw sessions resume <session-id>
 uv run easy-claw sessions delete <session-id>
 ```
-

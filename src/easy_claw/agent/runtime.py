@@ -86,14 +86,6 @@ class ConsoleApprovalReviewer:
         return decisions
 
 
-class FakeAgentRuntime:
-    def run(self, request: AgentRequest) -> AgentResult:
-        return AgentResult(
-            content=f"easy-claw dry-run 测试：{request.prompt}",
-            thread_id=request.thread_id,
-        )
-
-
 class DeepAgentsRuntime:
     def __init__(self, reviewer: ApprovalReviewer | None = None) -> None:
         self._reviewer = reviewer or ConsoleApprovalReviewer()
@@ -107,9 +99,9 @@ class DeepAgentsRuntime:
             raise RuntimeError("DeepAgentsRuntime 必须传入 config。")
         cfg = request.config
         if cfg.model is None:
-            raise RuntimeError("运行非 dry-run 聊天前请先设置 EASY_CLAW_MODEL。")
+            raise RuntimeError("运行聊天前请先设置 EASY_CLAW_MODEL。")
         if cfg.api_key is None:
-            raise RuntimeError("运行非 dry-run 聊天前请先设置 EASY_CLAW_API_KEY。")
+            raise RuntimeError("运行聊天前请先设置 EASY_CLAW_API_KEY。")
         if cfg.checkpoint_db_path is None:
             raise RuntimeError("DeepAgentsRuntime 必须配置 checkpoint_db_path。")
 

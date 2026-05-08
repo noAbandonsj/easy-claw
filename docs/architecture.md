@@ -142,8 +142,6 @@ class DeepAgentsRuntime:
 4. `DeepAgentSession.stream(prompt)` 将 LangGraph 消息流转换为 `StreamEvent`，在 CLI 和 WebSocket 中展示 token、工具调用、工具结果和审批提示
 5. 返回 `AgentResult` 包含最后一条消息的文本内容和 token 用量
 
-`FakeAgentRuntime` 提供 dry-run 能力，不调用模型直接返回回显结果，用于测试和冒烟检查。
-
 后期规划：
 - 引入 LangGraph 长任务恢复能力
 - 对 UI、记忆、工具和审批保持 `AgentRuntime` 接口不变

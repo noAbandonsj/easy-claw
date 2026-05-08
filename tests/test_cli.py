@@ -24,13 +24,25 @@ def test_doctor_command_reports_ok(tmp_path, monkeypatch):
     assert "MCP 配置文件:" in result.stdout
 
 
-def test_chat_dry_run_uses_fake_runtime():
+def test_chat_dry_run_option_is_removed():
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "--dry-run", "hello"])
 
-    assert result.exit_code == 0
-    assert "easy-claw dry-run 测试：hello" in result.stdout
+    assert result.exit_code != 0
+    assert "easy-claw dry-run 测试" not in result.stdout
+
+    help_result = runner.invoke(app, ["chat", "--help"])
+    assert help_result.exit_code == 0
+    assert "--dry-run" not in help_result.stdout
+
+
+def test_cli_internals_are_split_into_focused_modules():
+    from easy_claw import cli_interactive, cli_slash, cli_views
+
+    assert hasattr(cli_interactive, "_run_interactive_chat")
+    assert hasattr(cli_slash, "_dispatch_interactive_command")
+    assert hasattr(cli_views, "_print_session_status")
 
 
 def test_chat_passes_resolved_skill_source_records(tmp_path, monkeypatch):
@@ -52,13 +64,16 @@ def test_chat_passes_resolved_skill_source_records(tmp_path, monkeypatch):
             captured_requests.append(request)
             return AgentResult(content="done", thread_id=request.thread_id)
 
-    def fake_resolve_skill_sources(*, app_root, workspace_root, home_dir=None):
-        assert app_root == tmp_path
-        assert workspace_root == tmp_path
+    def fake_resolve_skill_source_records(config):
+        assert config.cwd == tmp_path
+        assert config.default_workspace == tmp_path
         return [source]
 
     monkeypatch.setattr("easy_claw.cli.DeepAgentsRuntime", FakeRuntime)
-    monkeypatch.setattr("easy_claw.cli.resolve_skill_sources", fake_resolve_skill_sources)
+    monkeypatch.setattr(
+        "easy_claw.cli._resolve_skill_source_records",
+        fake_resolve_skill_source_records,
+    )
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "hello"])
@@ -92,7 +107,7 @@ def test_chat_interactive_reuses_one_session_thread(tmp_path, monkeypatch):
                 thread_id=request.thread_id,
             )
 
-    monkeypatch.setattr("easy_claw.cli.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(
@@ -113,9 +128,9 @@ def test_chat_interactive_reuses_one_session_thread(tmp_path, monkeypatch):
 def test_render_streaming_turn_prints_tokens_and_tool_panels(monkeypatch):
     output = StringIO()
     test_console = Console(file=output, force_terminal=False, color_system=None, width=100)
-    monkeypatch.setattr("easy_claw.cli.console", test_console)
+    monkeypatch.setattr("easy_claw.cli_interactive.console", test_console)
 
-    from easy_claw.cli import _render_streaming_turn
+    from easy_claw.cli_interactive import _render_streaming_turn
 
     _render_streaming_turn(
         iter(
@@ -171,7 +186,7 @@ def test_chat_interactive_uses_stream_when_session_supports_it(tmp_path, monkeyp
         def open_session(self, request):
             return FakeStreamingSession()
 
-    monkeypatch.setattr("easy_claw.cli.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(
@@ -199,7 +214,7 @@ def test_root_command_starts_interactive_chat(tmp_path, monkeypatch):
             captured_requests.append(request)
             return AgentResult(content=f"answer: {request.prompt}", thread_id=request.thread_id)
 
-    monkeypatch.setattr("easy_claw.cli.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(app, [], input="hello\nexit\n")
@@ -209,10 +224,17 @@ def test_root_command_starts_interactive_chat(tmp_path, monkeypatch):
     assert captured_requests[0].prompt == "hello"
 
 
-def test_interactive_help_lists_common_slash_commands():
+def test_interactive_help_lists_common_slash_commands(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
+
+    class FakeRuntime:
+        pass
+
+    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
     runner = CliRunner()
 
-    result = runner.invoke(app, ["chat", "--interactive", "--dry-run"], input="/help\nexit\n")
+    result = runner.invoke(app, ["chat", "--interactive"], input="/help\nexit\n")
 
     assert result.exit_code == 0
     assert "/doctor" in result.stdout
@@ -226,10 +248,34 @@ def test_interactive_help_lists_common_slash_commands():
     assert "uv run easy-claw --help" in result.stdout
 
 
-def test_interactive_prompt_avoids_raw_ansi_in_captured_output():
+def test_interactive_slash_only_commands_do_not_open_agent_session(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
+
+    class FakeRuntime:
+        def open_session(self, request):
+            raise AssertionError("slash-only commands should not open the agent session")
+
+    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
     runner = CliRunner()
 
-    result = runner.invoke(app, ["chat", "--interactive", "--dry-run"], input="/help\nexit\n")
+    result = runner.invoke(app, ["chat", "--interactive"], input="/help\nexit\n")
+
+    assert result.exit_code == 0
+    assert "/status" in result.stdout
+
+
+def test_interactive_prompt_avoids_raw_ansi_in_captured_output(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
+
+    class FakeRuntime:
+        pass
+
+    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["chat", "--interactive"], input="/help\nexit\n")
 
     assert result.exit_code == 0
     assert "\x1b[" not in result.stdout
@@ -256,8 +302,8 @@ def test_interactive_status_shows_capability_summary(tmp_path, monkeypatch):
     def fake_resolve_skill_sources(*, app_root, workspace_root, home_dir=None):
         return [source]
 
-    monkeypatch.setattr("easy_claw.cli.DeepAgentsRuntime", FakeRuntime)
-    monkeypatch.setattr("easy_claw.cli.resolve_skill_sources", fake_resolve_skill_sources)
+    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_views.resolve_skill_sources", fake_resolve_skill_sources)
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "--interactive"], input="/status\nexit\n")
@@ -290,8 +336,8 @@ def test_interactive_skills_slash_command_prints_resolved_sources(tmp_path, monk
     def fake_resolve_skill_sources(*, app_root, workspace_root, home_dir=None):
         return [source]
 
-    monkeypatch.setattr("easy_claw.cli.DeepAgentsRuntime", FakeRuntime)
-    monkeypatch.setattr("easy_claw.cli.resolve_skill_sources", fake_resolve_skill_sources)
+    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_views.resolve_skill_sources", fake_resolve_skill_sources)
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "--interactive"], input="/skills\nexit\n")
@@ -314,7 +360,7 @@ def test_interactive_model_slash_command_switches_next_turn_model(tmp_path, monk
                 thread_id=request.thread_id,
             )
 
-    monkeypatch.setattr("easy_claw.cli.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(
@@ -464,7 +510,7 @@ def test_dev_skills_list_all_sources_prints_resolved_sources(tmp_path, monkeypat
 
 
 def test_startup_banner_shows_mcp_status(tmp_path, monkeypatch):
-    from easy_claw.cli import _count_mcp_servers, _mcp_status
+    from easy_claw.cli_views import _count_mcp_servers, _mcp_status
     from easy_claw.config import AppConfig
 
     assert _count_mcp_servers("nonexistent.json") == 0

@@ -122,7 +122,6 @@ uv run easy-claw doctor
 | `.\scripts\start.ps1` | 同步依赖、初始化数据库并启动聊天 |
 | `.\scripts\start.ps1 -Mcp` | 一键配置默认 MCP，并启动聊天 |
 | `.\scripts\setup-mcp.ps1` | 只配置默认 MCP，不启动聊天 |
-| `uv run easy-claw chat --dry-run "你好"` | 不调用模型，只测试命令链路 |
 | `uv run easy-claw doctor` | 打印完整环境诊断信息 |
 | `uv run easy-claw serve` | 启动本地 API 和 Web 页面 |
 | `uv run easy-claw dev skills list --all-sources` | 以 TSV 查看自动收集的 skill 来源 |

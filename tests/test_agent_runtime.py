@@ -9,7 +9,6 @@ from easy_claw.agent.runtime import (
     AgentRequest,
     DeepAgentSession,
     DeepAgentsRuntime,
-    FakeAgentRuntime,
     StaticApprovalReviewer,
     StreamEvent,
     _build_chat_model,
@@ -38,19 +37,22 @@ def _test_config(*, tmp_path: Path, **kwargs: object) -> AppConfig:
     return AppConfig(**defaults)
 
 
-def test_fake_agent_runtime_returns_deterministic_result(tmp_path):
-    runtime = FakeAgentRuntime()
+def test_deepagents_runtime_requires_model_configuration(tmp_path):
+    runtime = DeepAgentsRuntime()
+    config = _test_config(tmp_path=tmp_path, model=None)
 
-    result = runtime.run(
-        AgentRequest(
-            prompt="hello",
-            thread_id="thread-1",
-            config=None,
+    try:
+        runtime.open_session(
+            AgentRequest(
+                prompt="hello",
+                thread_id="thread-1",
+                config=config,
+            )
         )
-    )
-
-    assert result.content == "easy-claw dry-run 测试：hello"
-    assert result.thread_id == "thread-1"
+    except RuntimeError as exc:
+        assert "EASY_CLAW_MODEL" in str(exc)
+    else:
+        raise AssertionError("DeepAgentsRuntime should require EASY_CLAW_MODEL")
 
 
 def test_build_chat_model_creates_openai_compatible_model(monkeypatch):
