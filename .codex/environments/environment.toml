@@ -8,4 +8,4 @@ script = ""
 [[actions]]
 name = "运行"
 icon = "run"
-command = "uv run easy-claw chat --interactive"
+command = "uv run easy-claw"

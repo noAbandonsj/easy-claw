@@ -7,6 +7,7 @@ from pathlib import Path
 
 import typer
 from rich.panel import Panel
+from rich.rule import Rule
 
 from easy_claw.agent.runtime import AgentRequest, AgentResult, DeepAgentsRuntime, StreamEvent
 from easy_claw.cli_slash import (
@@ -205,7 +206,10 @@ def _run_interactive_loop(
 
 def _read_interactive_prompt() -> str:
     if console.is_terminal:
-        return console.input("[bold hot_pink]>[/] ").strip()
+        console.print(Rule(style="hot_pink"))
+        prompt = console.input("[bold hot_pink]>[/] ")
+        console.print(Rule(style="hot_pink"))
+        return prompt.strip()
     return input("> ").strip()
 
 

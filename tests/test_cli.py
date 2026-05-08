@@ -281,6 +281,20 @@ def test_interactive_prompt_avoids_raw_ansi_in_captured_output(tmp_path, monkeyp
     assert "\x1b[" not in result.stdout
 
 
+def test_terminal_prompt_renders_hot_pink_rules(monkeypatch):
+    output = StringIO()
+    test_console = Console(file=output, force_terminal=True, color_system=None, width=16)
+    monkeypatch.setattr("easy_claw.cli_interactive.console", test_console)
+    monkeypatch.setattr("builtins.input", lambda: "hello")
+
+    from easy_claw.cli_interactive import _read_interactive_prompt
+
+    assert _read_interactive_prompt() == "hello"
+    rendered = output.getvalue()
+    assert rendered.count("\u2500" * 16) == 2
+    assert "> " in rendered
+
+
 def test_interactive_status_shows_capability_summary(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
