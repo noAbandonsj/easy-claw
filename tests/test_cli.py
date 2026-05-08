@@ -189,6 +189,146 @@ def test_chat_interactive_uses_stream_when_session_supports_it(tmp_path, monkeyp
     assert events.count("agent_run") == 1
 
 
+def test_root_command_starts_interactive_chat(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
+    captured_requests = []
+
+    class FakeRuntime:
+        def run(self, request):
+            captured_requests.append(request)
+            return AgentResult(content=f"answer: {request.prompt}", thread_id=request.thread_id)
+
+    monkeypatch.setattr("easy_claw.cli.DeepAgentsRuntime", FakeRuntime)
+    runner = CliRunner()
+
+    result = runner.invoke(app, [], input="hello\nexit\n")
+
+    assert result.exit_code == 0
+    assert "answer: hello" in result.stdout
+    assert captured_requests[0].prompt == "hello"
+
+
+def test_interactive_help_lists_common_slash_commands():
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["chat", "--interactive", "--dry-run"], input="/help\nexit\n")
+
+    assert result.exit_code == 0
+    assert "/doctor" in result.stdout
+    assert "/skills" in result.stdout
+    assert "/mcp" in result.stdout
+    assert "/browser" in result.stdout
+    assert "/sessions" in result.stdout
+    assert "/resume <session-id>" in result.stdout
+    assert "/delete-session <session-id>" in result.stdout
+    assert "/model <name>" in result.stdout
+    assert "uv run easy-claw --help" in result.stdout
+
+
+def test_interactive_prompt_avoids_raw_ansi_in_captured_output():
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["chat", "--interactive", "--dry-run"], input="/help\nexit\n")
+
+    assert result.exit_code == 0
+    assert "\x1b[" not in result.stdout
+
+
+def test_interactive_status_shows_capability_summary(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
+    monkeypatch.setenv("EASY_CLAW_BROWSER_ENABLED", "true")
+    mcp_config = tmp_path / "mcp_servers.json"
+    mcp_config.write_text('{"_comment": "metadata", "git": {}}')
+    monkeypatch.setenv("EASY_CLAW_MCP_CONFIG", str(mcp_config))
+    source = SkillSource(
+        scope="project",
+        label="project easy-claw",
+        filesystem_path=tmp_path / ".easy-claw" / "skills",
+        backend_path="/.easy-claw/skills/",
+        skill_count=3,
+    )
+
+    class FakeRuntime:
+        pass
+
+    def fake_resolve_skill_sources(*, app_root, workspace_root, home_dir=None):
+        return [source]
+
+    monkeypatch.setattr("easy_claw.cli.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.resolve_skill_sources", fake_resolve_skill_sources)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["chat", "--interactive"], input="/status\nexit\n")
+
+    assert result.exit_code == 0
+    assert "Skill 来源" in result.stdout
+    assert "1 个来源，3 个 skill" in result.stdout
+    assert "MCP" in result.stdout
+    assert "auto（1 个服务）" in result.stdout
+    assert "浏览器" in result.stdout
+    assert "已启用" in result.stdout
+    assert "模型调用上限" in result.stdout
+    assert "工具调用上限" in result.stdout
+
+
+def test_interactive_skills_slash_command_prints_resolved_sources(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
+    source = SkillSource(
+        scope="project",
+        label="project easy-claw",
+        filesystem_path=tmp_path / ".easy-claw" / "skills",
+        backend_path="/.easy-claw/skills/",
+        skill_count=1,
+    )
+
+    class FakeRuntime:
+        pass
+
+    def fake_resolve_skill_sources(*, app_root, workspace_root, home_dir=None):
+        return [source]
+
+    monkeypatch.setattr("easy_claw.cli.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.resolve_skill_sources", fake_resolve_skill_sources)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["chat", "--interactive"], input="/skills\nexit\n")
+
+    assert result.exit_code == 0
+    assert "project easy-claw" in result.stdout
+    assert "/.easy-claw/skills/" in result.stdout
+
+
+def test_interactive_model_slash_command_switches_next_turn_model(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
+    captured_requests = []
+
+    class FakeRuntime:
+        def run(self, request):
+            captured_requests.append(request)
+            return AgentResult(
+                content=f"model: {request.config.model}",
+                thread_id=request.thread_id,
+            )
+
+    monkeypatch.setattr("easy_claw.cli.DeepAgentsRuntime", FakeRuntime)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        ["chat", "--interactive"],
+        input="/model alternate-model\nhello\nexit\n",
+    )
+
+    assert result.exit_code == 0
+    assert "模型已切换到 alternate-model" in result.stdout
+    assert captured_requests[0].config.model == "alternate-model"
+    assert "model: alternate-model" in result.stdout
+
+
 def test_docs_summarize_command_is_removed():
     runner = CliRunner()
 
