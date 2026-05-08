@@ -38,6 +38,7 @@ easy-claw 当前内置这些技能：
 - `analyze-project`：分析本地项目结构，并总结架构、命令和风险。
 - `summarize-docs`：将选中的本地文档总结为简洁的 Markdown 报告。
 - `create-skill`：创建、改写或检查 easy-claw/DeepAgents 技能。
+- `reflect-and-improve`：复盘执行过程，提炼可复用经验，并建议写入记忆或技能。
 
 如果你想把自己的流程沉淀成技能，可以直接在聊天里说：
 
@@ -48,6 +49,16 @@ easy-claw 当前内置这些技能：
 ```
 
 `create-skill` 会帮助选择项目目录或用户全局目录，生成标准 `SKILL.md` 结构，并提醒你用 `/skills` 或 `uv run easy-claw dev skills list --all-sources` 验证加载结果。
+
+如果你想让 easy-claw 复盘一次任务或记住某条工作习惯，可以直接说：
+
+```text
+复盘一下刚才哪里可以改进
+以后遇到这种情况都这样做
+把这次经验沉淀下来
+```
+
+`reflect-and-improve` 会先提炼事实和可复用经验，再建议写入记忆、项目 skill、用户全局 skill 或内置 skill。它不会在没有用户确认时自动修改文件。
 
 ## 自动收集路径
 

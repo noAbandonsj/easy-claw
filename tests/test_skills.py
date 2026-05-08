@@ -25,6 +25,15 @@ def test_builtin_skills_include_create_skill():
     assert "SKILL.md" in create_skill.body
 
 
+def test_builtin_skills_include_reflect_and_improve():
+    skills = discover_skills(PROJECT_ROOT / "skills")
+
+    skill = next(skill for skill in skills if skill.name == "reflect-and-improve")
+
+    assert "复盘" in skill.description
+    assert "沉淀" in skill.body
+
+
 def test_discover_skills_reads_deep_agents_style_skill(tmp_path):
     skill_dir = tmp_path / "skills" / "core" / "analyze-project"
     skill_dir.mkdir(parents=True)
