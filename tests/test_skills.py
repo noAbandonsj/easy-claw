@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from easy_claw.skills import discover_skill_sources, discover_skills, resolve_skill_sources
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _write_skill(source_root, name, description="Test skill."):
@@ -10,6 +14,15 @@ def _write_skill(source_root, name, description="Test skill."):
     )
     (skill_dir / "helper.py").write_text("print('helper')\n", encoding="utf-8")
     return skill_dir
+
+
+def test_builtin_skills_include_create_skill():
+    skills = discover_skills(PROJECT_ROOT / "skills")
+
+    create_skill = next(skill for skill in skills if skill.name == "create-skill")
+
+    assert "创建" in create_skill.description
+    assert "SKILL.md" in create_skill.body
 
 
 def test_discover_skills_reads_deep_agents_style_skill(tmp_path):
