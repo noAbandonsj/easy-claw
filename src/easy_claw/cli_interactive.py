@@ -25,6 +25,7 @@ from easy_claw.storage.db import initialize_product_db
 from easy_claw.storage.repositories import AuditRepository, SessionRepository
 
 STREAM_PANEL_VALUE_LIMIT = 1200
+PROMPT_RULE_STYLE = "light_pink1"
 
 
 def _run_interactive_chat(
@@ -206,9 +207,14 @@ def _run_interactive_loop(
 
 def _read_interactive_prompt() -> str:
     if console.is_terminal:
-        console.print(Rule(style="hot_pink"))
-        prompt = console.input("[bold hot_pink]>[/] ")
-        console.print(Rule(style="hot_pink"))
+        console.print(Rule(style=PROMPT_RULE_STYLE))
+        console.print(f"[bold {PROMPT_RULE_STYLE}]>[/] ")
+        console.print(Rule(style=PROMPT_RULE_STYLE))
+        console.file.write("\033[2A\033[2C")
+        console.file.flush()
+        prompt = input()
+        console.file.write("\033[0m\n")
+        console.file.flush()
         return prompt.strip()
     return input("> ").strip()
 
