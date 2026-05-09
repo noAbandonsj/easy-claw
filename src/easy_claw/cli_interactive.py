@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 
 import typer
+from rich.markup import escape
 from rich.panel import Panel
 from rich.rule import Rule
 
@@ -213,10 +214,17 @@ def _read_interactive_prompt() -> str:
         console.file.write("\033[2A\033[2C")
         console.file.flush()
         prompt = input()
-        console.file.write("\033[0m\n")
-        console.file.flush()
-        return prompt.strip()
+        _clear_prompt_frame()
+        stripped = prompt.strip()
+        if stripped:
+            console.print(f"[bold {PROMPT_RULE_STYLE}]>[/] {escape(stripped)}")
+        return stripped
     return input("> ").strip()
+
+
+def _clear_prompt_frame() -> None:
+    console.file.write("\r\033[2K\033[1A\r\033[2K\033[1A\r\033[2K")
+    console.file.flush()
 
 
 def _agent_request_for_prompt(request: AgentRequest, prompt: str) -> AgentRequest:

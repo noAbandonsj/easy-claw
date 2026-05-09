@@ -281,7 +281,7 @@ def test_interactive_prompt_avoids_raw_ansi_in_captured_output(tmp_path, monkeyp
     assert "\x1b[" not in result.stdout
 
 
-def test_terminal_prompt_renders_light_pink_rules_before_input(monkeypatch):
+def test_terminal_prompt_renders_light_pink_rules_before_input_and_clears_them(monkeypatch):
     output = StringIO()
     test_console = Console(file=output, force_terminal=True, color_system="256", width=16)
     monkeypatch.setattr("easy_claw.cli_interactive.console", test_console)
@@ -303,6 +303,8 @@ def test_terminal_prompt_renders_light_pink_rules_before_input(monkeypatch):
     rendered = output.getvalue()
     assert rendered.count("\u2500" * 16) == 2
     assert ">" in rendered
+    assert "hello" in rendered
+    assert rendered.count("\x1b[2K") == 3
 
 
 def test_interactive_status_shows_capability_summary(tmp_path, monkeypatch):
