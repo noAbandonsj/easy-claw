@@ -107,7 +107,7 @@ def test_resolve_skill_sources_collects_common_paths_in_priority_order(tmp_path)
         ("builtin", "easy-claw built-in", builtin_source.resolve()),
         ("user", "user easy-claw", user_source.resolve()),
         ("user", "user claude", claude_source.resolve()),
-        ("project", "project deepagents", project_source.resolve()),
+        ("project", "project skills (legacy deepagents)", project_source.resolve()),
         ("project", "project easy-claw", project_alias_source.resolve()),
     ]
     assert [source.skill_count for source in sources] == [1, 1, 1, 1, 1]

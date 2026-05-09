@@ -62,8 +62,20 @@ def discover_skills(skills_root: Path) -> list[Skill]:
     return [load_skill(path) for path in skill_paths]
 
 
+def discover_source_skills(source: SkillSource) -> list[Skill]:
+    """Return direct child ``SKILL.md`` skills from a resolved skill source."""
+    if not source.filesystem_path.exists():
+        return []
+    skill_paths = sorted(
+        path
+        for path in source.filesystem_path.glob("*/SKILL.md")
+        if path.is_file()
+    )
+    return [load_skill(path) for path in skill_paths]
+
+
 def discover_skill_sources(skills_root: Path, workspace_root: Path) -> list[str]:
-    """返回 DeepAgents 可读取的技能源目录路径。"""
+    """返回可按虚拟路径引用的技能源目录路径。"""
     workspace = workspace_root.resolve()
     source_dirs: set[Path] = set()
     for skill in discover_skills(skills_root):
@@ -91,12 +103,12 @@ def resolve_skill_sources(
     workspace_root: Path,
     home_dir: Path | None = None,
 ) -> list[SkillSource]:
-    """Resolve complete DeepAgents skill source directories.
+    """Resolve complete easy-claw skill source directories.
 
     The returned sources are ordered from low to high priority. Each source path
     is a directory that contains one or more child skill directories with
     ``SKILL.md`` files; helper files next to ``SKILL.md`` remain available to the
-    DeepAgents skill middleware.
+    easy-claw skill tools.
     """
     app = app_root.expanduser().resolve(strict=False)
     workspace = workspace_root.expanduser().resolve(strict=False)
@@ -104,12 +116,12 @@ def resolve_skill_sources(
 
     candidates = [
         ("builtin", "easy-claw built-in", app / "skills"),
-        ("user", "user deepagents", home / ".deepagents" / "skills"),
-        ("user", "user deepagents agent", home / ".deepagents" / "agent" / "skills"),
+        ("user", "user skills (legacy deepagents)", home / ".deepagents" / "skills"),
+        ("user", "user agent skills (legacy deepagents)", home / ".deepagents" / "agent" / "skills"),
         ("user", "user agents", home / ".agents" / "skills"),
         ("user", "user easy-claw", home / ".easy-claw" / "skills"),
         ("user", "user claude", home / ".claude" / "skills"),
-        ("project", "project deepagents", workspace / ".deepagents" / "skills"),
+        ("project", "project skills (legacy deepagents)", workspace / ".deepagents" / "skills"),
         ("project", "project agents", workspace / ".agents" / "skills"),
         ("project", "project easy-claw", workspace / ".easy-claw" / "skills"),
         ("project", "project skills", workspace / "skills"),
@@ -139,23 +151,6 @@ def resolve_skill_sources(
                 )
             )
     return sources
-
-
-def resolve_deepagents_skill_source_paths(
-    *,
-    app_root: Path,
-    workspace_root: Path,
-    home_dir: Path | None = None,
-) -> list[str]:
-    """Return backend source paths suitable for ``create_deep_agent(skills=...)``."""
-    return [
-        source.backend_path
-        for source in resolve_skill_sources(
-            app_root=app_root,
-            workspace_root=workspace_root,
-            home_dir=home_dir,
-        )
-    ]
 
 
 def _discover_source_dirs(skills_root: Path) -> list[Path]:

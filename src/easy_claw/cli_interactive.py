@@ -10,7 +10,7 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.rule import Rule
 
-from easy_claw.agent.runtime import AgentRequest, AgentResult, DeepAgentsRuntime, StreamEvent
+from easy_claw.agent.runtime import AgentRequest, AgentResult, LangChainAgentRuntime, StreamEvent
 from easy_claw.cli_slash import (
     LoopControl,
     SlashCommandContext,
@@ -40,7 +40,7 @@ def _run_interactive_chat(
 
     initialize_product_db(config.product_db_path)
     audit_repo = AuditRepository(config.product_db_path)
-    runtime = DeepAgentsRuntime()
+    runtime = LangChainAgentRuntime()
     conversation: list[tuple[str, str]] = []
     token_usage: dict[str, int] = {}
 

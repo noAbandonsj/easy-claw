@@ -9,7 +9,7 @@ import uvicorn
 from rich.table import Table
 
 from easy_claw import __version__ as _easy_claw_version
-from easy_claw.agent.runtime import AgentRequest, DeepAgentsRuntime
+from easy_claw.agent.runtime import AgentRequest, LangChainAgentRuntime
 from easy_claw.cli_interactive import _run_interactive_chat
 from easy_claw.cli_views import (
     _delete_checkpoint_thread,
@@ -214,7 +214,7 @@ def chat(
         title=prompt[:60] or "聊天",
     )
     skill_source_records = _resolve_skill_source_records(config)
-    result = DeepAgentsRuntime().run(
+    result = LangChainAgentRuntime().run(
         AgentRequest(
             prompt=prompt,
             thread_id=session.id,
@@ -226,7 +226,13 @@ def chat(
         event_type="agent_run",
         payload={"session_id": session.id, "prompt_length": len(prompt)},
     )
-    console.print(result.content)
+    _print_agent_content(result.content)
+
+
+def _print_agent_content(content: str) -> None:
+    encoding = getattr(console.file, "encoding", None) or "utf-8"
+    safe_content = content.encode(encoding, errors="replace").decode(encoding, errors="replace")
+    console.print(safe_content)
 
 
 @tools_app.command("search")

@@ -69,7 +69,7 @@ def test_chat_passes_resolved_skill_source_records(tmp_path, monkeypatch):
         assert config.default_workspace == tmp_path
         return [source]
 
-    monkeypatch.setattr("easy_claw.cli.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.LangChainAgentRuntime", FakeRuntime)
     monkeypatch.setattr(
         "easy_claw.cli._resolve_skill_source_records",
         fake_resolve_skill_source_records,
@@ -81,6 +81,38 @@ def test_chat_passes_resolved_skill_source_records(tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert captured_requests[0].skill_sources == ()
     assert captured_requests[0].skill_source_records == [source]
+
+
+def test_chat_replaces_unencodable_model_output_for_legacy_windows_console(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
+    printed = []
+
+    class FakeRuntime:
+        def run(self, request):
+            return AgentResult(content="✅ done", thread_id=request.thread_id)
+
+    class FakeConsole:
+        class File:
+            encoding = "gbk"
+
+        file = File()
+
+        def print(self, value):
+            value.encode(self.file.encoding)
+            printed.append(value)
+
+    monkeypatch.setattr("easy_claw.cli.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.console", FakeConsole())
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["chat", "hello"])
+
+    assert result.exit_code == 0
+    assert printed == ["? done"]
 
 
 def test_chat_without_model_reports_configuration_error(tmp_path, monkeypatch):
@@ -107,7 +139,7 @@ def test_chat_interactive_reuses_one_session_thread(tmp_path, monkeypatch):
                 thread_id=request.thread_id,
             )
 
-    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(
@@ -208,7 +240,7 @@ def test_chat_interactive_uses_stream_when_session_supports_it(tmp_path, monkeyp
         def open_session(self, request):
             return FakeStreamingSession()
 
-    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(
@@ -236,7 +268,7 @@ def test_root_command_starts_interactive_chat(tmp_path, monkeypatch):
             captured_requests.append(request)
             return AgentResult(content=f"answer: {request.prompt}", thread_id=request.thread_id)
 
-    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(app, [], input="hello\nexit\n")
@@ -253,7 +285,7 @@ def test_interactive_help_lists_common_slash_commands(tmp_path, monkeypatch):
     class FakeRuntime:
         pass
 
-    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "--interactive"], input="/help\nexit\n")
@@ -278,7 +310,7 @@ def test_interactive_slash_only_commands_do_not_open_agent_session(tmp_path, mon
         def open_session(self, request):
             raise AssertionError("slash-only commands should not open the agent session")
 
-    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "--interactive"], input="/help\nexit\n")
@@ -294,7 +326,7 @@ def test_interactive_prompt_avoids_raw_ansi_in_captured_output(tmp_path, monkeyp
     class FakeRuntime:
         pass
 
-    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "--interactive"], input="/help\nexit\n")
@@ -350,7 +382,7 @@ def test_interactive_status_shows_capability_summary(tmp_path, monkeypatch):
     def fake_resolve_skill_sources(*, app_root, workspace_root, home_dir=None):
         return [source]
 
-    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
     monkeypatch.setattr("easy_claw.cli_views.resolve_skill_sources", fake_resolve_skill_sources)
     runner = CliRunner()
 
@@ -379,7 +411,7 @@ def test_interactive_status_shows_accumulated_token_usage(tmp_path, monkeypatch)
                 usage={"input": 1234, "output": 56, "total": 1290},
             )
 
-    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "--interactive"], input="hello\n/status\nexit\n")
@@ -420,7 +452,7 @@ def test_interactive_status_shows_streamed_token_usage(tmp_path, monkeypatch):
         def open_session(self, request):
             return FakeStreamingSession()
 
-    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "--interactive"], input="hello\n/status\nexit\n")
@@ -451,7 +483,7 @@ def test_interactive_skills_slash_command_prints_resolved_sources(tmp_path, monk
     def fake_resolve_skill_sources(*, app_root, workspace_root, home_dir=None):
         return [source]
 
-    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
     monkeypatch.setattr("easy_claw.cli_views.resolve_skill_sources", fake_resolve_skill_sources)
     runner = CliRunner()
 
@@ -475,7 +507,7 @@ def test_interactive_model_slash_command_switches_next_turn_model(tmp_path, monk
                 thread_id=request.thread_id,
             )
 
-    monkeypatch.setattr("easy_claw.cli_interactive.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(

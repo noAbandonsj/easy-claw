@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from easy_claw.agent.runtime import (
     AgentRequest,
-    DeepAgentsRuntime,
+    LangChainAgentRuntime,
     StaticApprovalReviewer,
     StreamEvent,
 )
@@ -209,7 +209,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             app_root=config.cwd,
             workspace_root=config.default_workspace,
         )
-        runtime = DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True))
+        runtime = LangChainAgentRuntime(reviewer=StaticApprovalReviewer(approve=True))
 
         await websocket.send_json(
             {

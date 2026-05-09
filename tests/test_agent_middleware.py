@@ -1,4 +1,8 @@
-from langchain.agents.middleware import ModelCallLimitMiddleware, ToolCallLimitMiddleware
+from langchain.agents.middleware import (
+    HumanInTheLoopMiddleware,
+    ModelCallLimitMiddleware,
+    ToolCallLimitMiddleware,
+)
 
 from easy_claw.agent.middleware import build_agent_middleware
 
@@ -15,3 +19,14 @@ def test_build_agent_middleware_uses_default_call_limits():
 
 def test_build_agent_middleware_can_disable_limits():
     assert build_agent_middleware(max_model_calls=None, max_tool_calls=None) == ()
+
+
+def test_build_agent_middleware_adds_human_in_the_loop_when_interrupts_enabled():
+    middleware = build_agent_middleware(
+        max_model_calls=None,
+        max_tool_calls=None,
+        interrupt_on={"run_command": True},
+    )
+
+    assert len(middleware) == 1
+    assert isinstance(middleware[0], HumanInTheLoopMiddleware)

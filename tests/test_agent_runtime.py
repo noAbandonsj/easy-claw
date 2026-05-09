@@ -2,19 +2,28 @@ from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 
-from langchain.agents.middleware import ModelCallLimitMiddleware, ToolCallLimitMiddleware
+from langchain.agents import create_agent
+from langchain.agents.middleware import (
+    HumanInTheLoopMiddleware,
+    ModelCallLimitMiddleware,
+    ToolCallLimitMiddleware,
+)
+from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
+from langchain_core.messages import AIMessage
+from langchain_core.tools import tool
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
 from easy_claw.agent.runtime import (
     AgentRequest,
     AgentResult,
-    DeepAgentSession,
-    DeepAgentsRuntime,
+    LangChainAgentRuntime,
+    LangChainAgentSession,
     StaticApprovalReviewer,
     StreamEvent,
     _build_chat_model,
     _build_interrupt_on,
-    _events_from_stream_item,
+    _events_from_message,
     _invoke_with_approval,
 )
 from easy_claw.config import AppConfig
@@ -38,8 +47,20 @@ def _test_config(*, tmp_path: Path, **kwargs: object) -> AppConfig:
     return AppConfig(**defaults)
 
 
+def test_langchain_runtime_is_available_as_agent_runtime_alias():
+    from easy_claw.agent.protocols import AgentRuntime
+    from easy_claw.agent.runtime import DeepAgentsRuntime, LangChainAgentRuntime
+
+    runtime = LangChainAgentRuntime()
+
+    assert isinstance(runtime, LangChainAgentRuntime)
+    assert DeepAgentsRuntime is LangChainAgentRuntime
+    assert hasattr(AgentRuntime, "run")
+    assert hasattr(AgentRuntime, "open_session")
+
+
 def test_deepagents_runtime_requires_model_configuration(tmp_path):
-    runtime = DeepAgentsRuntime()
+    runtime = LangChainAgentRuntime()
     config = _test_config(tmp_path=tmp_path, model=None)
 
     try:
@@ -53,7 +74,7 @@ def test_deepagents_runtime_requires_model_configuration(tmp_path):
     except RuntimeError as exc:
         assert "EASY_CLAW_MODEL" in str(exc)
     else:
-        raise AssertionError("DeepAgentsRuntime should require EASY_CLAW_MODEL")
+        raise AssertionError("LangChainAgentRuntime should require EASY_CLAW_MODEL")
 
 
 def test_build_chat_model_creates_openai_compatible_model(monkeypatch):
@@ -147,15 +168,10 @@ def test_invoke_with_approval_resumes_after_interrupt():
     assert agent.inputs[1].resume == {"decisions": [{"type": "approve"}]}
 
 
-def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, monkeypatch):
+def test_langchain_runtime_uses_create_agent_and_core_tools(tmp_path, monkeypatch):
     captured = {}
 
-    class FakeBackend:
-        def __init__(self, *, root_dir, virtual_mode):
-            captured["backend_root_dir"] = root_dir
-            captured["backend_virtual_mode"] = virtual_mode
-
-    class FakeDeepAgent:
+    class FakeAgent:
         def __init__(self):
             self.invoke_count = 0
 
@@ -163,22 +179,21 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
             self.invoke_count += 1
             return {"messages": [{"role": "assistant", "content": "done"}]}
 
-    def fake_create_deep_agent(**kwargs):
+    def fake_create_agent(**kwargs):
         captured.update(kwargs)
-        return FakeDeepAgent()
+        return FakeAgent()
 
     monkeypatch.setattr(
         "easy_claw.agent.runtime._build_chat_model",
         lambda model, base_url, api_key: "chat-model",
     )
-    monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
-    monkeypatch.setattr("deepagents.backends.LocalShellBackend", FakeBackend)
+    monkeypatch.setattr("langchain.agents.create_agent", fake_create_agent)
 
     config = _test_config(
         tmp_path=tmp_path,
         checkpoint_db_path=tmp_path / "checkpoints.sqlite",
     )
-    result = DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True)).run(
+    result = LangChainAgentRuntime(reviewer=StaticApprovalReviewer(approve=True)).run(
         AgentRequest(
             prompt="hello",
             thread_id="thread-1",
@@ -189,62 +204,47 @@ def test_deepagents_runtime_uses_native_skills_and_virtual_backend(tmp_path, mon
 
     assert result.content == "done"
     assert captured["model"] == "chat-model"
-    assert captured["skills"] == ["/skills/core/"]
-    assert captured["backend_root_dir"] == tmp_path
-    assert captured["backend_virtual_mode"] is True
-    assert captured["interrupt_on"] == {}
+    assert "skills" not in captured
+    assert "backend" not in captured
+    assert "interrupt_on" not in captured
     assert isinstance(captured["middleware"][0], ModelCallLimitMiddleware)
     assert captured["middleware"][0].run_limit == 40
     assert isinstance(captured["middleware"][1], ToolCallLimitMiddleware)
     assert captured["middleware"][1].run_limit == 100
-    assert len(captured["tools"]) == 4
     tool_names = {t.name for t in captured["tools"]}
     assert tool_names == {
         "search_web",
         "run_command",
         "run_python",
         "read_document",
+        "list_skills",
+        "read_skill",
     }
 
 
-def test_deepagents_runtime_routes_external_skill_sources(tmp_path, monkeypatch):
+def test_langchain_runtime_does_not_route_external_skill_sources_through_backend(
+    tmp_path,
+    monkeypatch,
+):
     captured = {}
     external_source = tmp_path / "external" / "skills"
     workspace = tmp_path / "workspace"
     external_source.mkdir(parents=True)
     workspace.mkdir()
 
-    class FakeLocalShellBackend:
-        def __init__(self, *, root_dir, virtual_mode):
-            self.root_dir = root_dir
-            self.virtual_mode = virtual_mode
-
-    class FakeFilesystemBackend:
-        def __init__(self, *, root_dir, virtual_mode):
-            self.root_dir = root_dir
-            self.virtual_mode = virtual_mode
-
-    class FakeCompositeBackend:
-        def __init__(self, *, default, routes):
-            captured["default_backend"] = default
-            captured["routes"] = routes
-
-    class FakeDeepAgent:
+    class FakeAgent:
         def invoke(self, input_value, config):
             return {"messages": [{"role": "assistant", "content": "done"}]}
 
-    def fake_create_deep_agent(**kwargs):
+    def fake_create_agent(**kwargs):
         captured.update(kwargs)
-        return FakeDeepAgent()
+        return FakeAgent()
 
     monkeypatch.setattr(
         "easy_claw.agent.runtime._build_chat_model",
         lambda model, base_url, api_key: "chat-model",
     )
-    monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
-    monkeypatch.setattr("deepagents.backends.LocalShellBackend", FakeLocalShellBackend)
-    monkeypatch.setattr("deepagents.backends.FilesystemBackend", FakeFilesystemBackend)
-    monkeypatch.setattr("deepagents.backends.CompositeBackend", FakeCompositeBackend)
+    monkeypatch.setattr("langchain.agents.create_agent", fake_create_agent)
 
     config = _test_config(
         tmp_path=tmp_path,
@@ -259,7 +259,7 @@ def test_deepagents_runtime_routes_external_skill_sources(tmp_path, monkeypatch)
         skill_count=1,
     )
 
-    result = DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True)).run(
+    result = LangChainAgentRuntime(reviewer=StaticApprovalReviewer(approve=True)).run(
         AgentRequest(
             prompt="hello",
             thread_id="thread-1",
@@ -269,15 +269,9 @@ def test_deepagents_runtime_routes_external_skill_sources(tmp_path, monkeypatch)
     )
 
     assert result.content == "done"
-    assert captured["skills"] == ["/easy-claw/skill-sources/external-skills/"]
-    assert isinstance(captured["backend"], FakeCompositeBackend)
-    assert isinstance(captured["default_backend"], FakeLocalShellBackend)
-    assert captured["default_backend"].root_dir == workspace
-    assert captured["default_backend"].virtual_mode is True
-    route_backend = captured["routes"]["/easy-claw/skill-sources/external-skills/"]
-    assert isinstance(route_backend, FakeFilesystemBackend)
-    assert route_backend.root_dir == external_source
-    assert route_backend.virtual_mode is True
+    assert "skills" not in captured
+    assert "backend" not in captured
+    assert "read_skill" in captured["system_prompt"]
 
 
 def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkeypatch):
@@ -285,17 +279,13 @@ def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkey
     fake_browser_tool = object()
     cleanup_calls = []
 
-    class FakeBackend:
-        def __init__(self, *, root_dir, virtual_mode):
-            pass
-
-    class FakeDeepAgent:
+    class FakeAgent:
         def invoke(self, input_value, config):
             return {"messages": [{"role": "assistant", "content": "done"}]}
 
-    def fake_create_deep_agent(**kwargs):
+    def fake_create_agent(**kwargs):
         captured.update(kwargs)
-        return FakeDeepAgent()
+        return FakeAgent()
 
     def fake_build_easy_claw_tools(context):
         captured["tool_context"] = context
@@ -313,8 +303,7 @@ def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkey
         "easy_claw.agent.runtime._build_chat_model",
         lambda model, base_url, api_key: "chat-model",
     )
-    monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
-    monkeypatch.setattr("deepagents.backends.LocalShellBackend", FakeBackend)
+    monkeypatch.setattr("langchain.agents.create_agent", fake_create_agent)
     monkeypatch.setattr(
         "easy_claw.agent.runtime.build_easy_claw_tools",
         fake_build_easy_claw_tools,
@@ -328,7 +317,7 @@ def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkey
         browser_headless=True,
         mcp_mode="auto",
     )
-    with DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True)).open_session(
+    with LangChainAgentRuntime(reviewer=StaticApprovalReviewer(approve=True)).open_session(
         AgentRequest(
             prompt="",
             thread_id="thread-1",
@@ -346,18 +335,15 @@ def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkey
     assert captured["tool_context"].mcp_mode == "auto"
     assert captured["tool_context"].mcp_config_path == "mcp_servers.json"
     assert fake_browser_tool in captured["tools"]
-    assert captured["interrupt_on"] == {"custom_risky_tool": True}
+    assert "interrupt_on" not in captured
+    assert isinstance(captured["middleware"][-1], HumanInTheLoopMiddleware)
     assert cleanup_calls == ["cleanup"]
 
 
 def test_deepagents_session_reuses_agent_between_turns(tmp_path, monkeypatch):
     captured = {"create_count": 0}
 
-    class FakeBackend:
-        def __init__(self, *, root_dir, virtual_mode):
-            pass
-
-    class FakeDeepAgent:
+    class FakeAgent:
         def __init__(self):
             self.prompts = []
 
@@ -365,23 +351,22 @@ def test_deepagents_session_reuses_agent_between_turns(tmp_path, monkeypatch):
             self.prompts.append(input_value["messages"][0]["content"])
             return {"messages": [{"role": "assistant", "content": f"answer {len(self.prompts)}"}]}
 
-    def fake_create_deep_agent(**kwargs):
+    def fake_create_agent(**kwargs):
         captured["create_count"] += 1
-        captured["agent"] = FakeDeepAgent()
+        captured["agent"] = FakeAgent()
         return captured["agent"]
 
     monkeypatch.setattr(
         "easy_claw.agent.runtime._build_chat_model",
         lambda model, base_url, api_key: "chat-model",
     )
-    monkeypatch.setattr("deepagents.create_deep_agent", fake_create_deep_agent)
-    monkeypatch.setattr("deepagents.backends.LocalShellBackend", FakeBackend)
+    monkeypatch.setattr("langchain.agents.create_agent", fake_create_agent)
 
     config = _test_config(
         tmp_path=tmp_path,
         checkpoint_db_path=tmp_path / "checkpoints.sqlite",
     )
-    runtime = DeepAgentsRuntime(reviewer=StaticApprovalReviewer(approve=True))
+    runtime = LangChainAgentRuntime(reviewer=StaticApprovalReviewer(approve=True))
     with runtime.open_session(
         AgentRequest(
             prompt="",
@@ -404,7 +389,7 @@ class FakeFailingInvokeAgent:
 
 
 def test_deepagent_session_run_returns_error_result_when_agent_raises():
-    session = DeepAgentSession(
+    session = LangChainAgentSession(
         agent=FakeFailingInvokeAgent(),
         thread_id="thread-1",
         reviewer=StaticApprovalReviewer(approve=True),
@@ -435,7 +420,7 @@ class FakeStreamingAgent:
         self.inputs = []
         self.stream_modes = []
 
-    def stream(self, input_value, config, stream_mode):
+    def stream(self, input_value, config, stream_mode, version=None):
         self.inputs.append(input_value)
         self.stream_modes.append(stream_mode)
         yield FakeStreamMessage("hello ")
@@ -454,7 +439,7 @@ def test_stream_event_can_represent_token_and_done():
 
 def test_deepagent_session_stream_yields_tokens_and_done():
     agent = FakeStreamingAgent()
-    session = DeepAgentSession(
+    session = LangChainAgentSession(
         agent=agent,
         thread_id="thread-1",
         reviewer=StaticApprovalReviewer(approve=True),
@@ -469,11 +454,11 @@ def test_deepagent_session_stream_yields_tokens_and_done():
         StreamEvent(type="done", content="hello world", thread_id="thread-1"),
     ]
     assert agent.inputs == [{"messages": [{"role": "user", "content": "say hello"}]}]
-    assert agent.stream_modes == ["messages"]
+    assert agent.stream_modes == [["messages", "updates"]]
 
 
 class FakeStreamingUsageAgent:
-    def stream(self, input_value, config, stream_mode):
+    def stream(self, input_value, config, stream_mode, version=None):
         yield FakeStreamMessageWithResponseUsage(
             "hello",
             {
@@ -487,7 +472,7 @@ class FakeStreamingUsageAgent:
 
 
 def test_deepagent_session_stream_extracts_response_metadata_token_usage():
-    session = DeepAgentSession(
+    session = LangChainAgentSession(
         agent=FakeStreamingUsageAgent(),
         thread_id="thread-1",
         reviewer=StaticApprovalReviewer(approve=True),
@@ -518,7 +503,7 @@ class FakeToolResultMessage:
 
 
 def test_stream_item_with_tool_call_yields_tool_call_start():
-    events = _events_from_stream_item(
+    events = _events_from_message(
         FakeToolCallMessage(
             content="",
             tool_calls=[{"name": "read_document", "args": {"path": "README.md"}}],
@@ -537,7 +522,7 @@ def test_stream_item_with_tool_call_yields_tool_call_start():
 
 
 def test_stream_item_with_tool_result_yields_tool_call_result():
-    events = _events_from_stream_item(
+    events = _events_from_message(
         FakeToolResultMessage(
             content="# Project\n\n" + ("x" * 50),
             name="read_document",
@@ -557,13 +542,13 @@ def test_stream_item_with_tool_result_yields_tool_call_result():
 
 
 class FakeStreamingToolResultAgent:
-    def stream(self, input_value, config, stream_mode):
+    def stream(self, input_value, config, stream_mode, version=None):
         yield FakeToolResultMessage(content="# Project", name="read_document")
         yield FakeStreamMessage("final answer")
 
 
 def test_deepagent_session_stream_done_content_ignores_tool_results():
-    session = DeepAgentSession(
+    session = LangChainAgentSession(
         agent=FakeStreamingToolResultAgent(),
         thread_id="thread-1",
         reviewer=StaticApprovalReviewer(approve=True),
@@ -580,7 +565,7 @@ def test_deepagent_session_stream_done_content_ignores_tool_results():
 
 
 class FakeStreamingFailureAgent:
-    def stream(self, input_value, config, stream_mode):
+    def stream(self, input_value, config, stream_mode, version=None):
         yield FakeToolCallMessage(
             content="",
             tool_calls=[{"name": "maps_weather", "args": {"city": "上海"}}],
@@ -589,7 +574,7 @@ class FakeStreamingFailureAgent:
 
 
 def test_deepagent_session_stream_yields_error_event_when_agent_stream_raises():
-    session = DeepAgentSession(
+    session = LangChainAgentSession(
         agent=FakeStreamingFailureAgent(),
         thread_id="thread-1",
         reviewer=StaticApprovalReviewer(approve=True),
@@ -622,7 +607,7 @@ class FakeStreamingInterruptAgent:
     def __init__(self):
         self.inputs = []
 
-    def stream(self, input_value, config, stream_mode):
+    def stream(self, input_value, config, stream_mode, version=None):
         self.inputs.append(input_value)
         if len(self.inputs) == 1:
             yield {
@@ -646,7 +631,7 @@ class FakeStreamingInterruptAgent:
 
 def test_deepagent_session_stream_resumes_after_interrupt():
     agent = FakeStreamingInterruptAgent()
-    session = DeepAgentSession(
+    session = LangChainAgentSession(
         agent=agent,
         thread_id="thread-1",
         reviewer=StaticApprovalReviewer(approve=True),
@@ -662,3 +647,54 @@ def test_deepagent_session_stream_resumes_after_interrupt():
     ]
     assert isinstance(agent.inputs[1], Command)
     assert agent.inputs[1].resume == {"decisions": [{"type": "approve"}]}
+
+
+class ToolCallingFakeMessagesModel(FakeMessagesListChatModel):
+    def bind_tools(self, tools, *, tool_choice=None, **kwargs):
+        return self
+
+
+def test_langchain_session_stream_resumes_real_human_interrupt():
+    @tool
+    def risky_tool(value: str) -> str:
+        """A test tool that requires approval."""
+        return f"tool:{value}"
+
+    agent = create_agent(
+        model=ToolCallingFakeMessagesModel(
+            responses=[
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "risky_tool",
+                            "args": {"value": "x"},
+                            "id": "call-1",
+                        }
+                    ],
+                ),
+                AIMessage(content="approved"),
+            ]
+        ),
+        tools=[risky_tool],
+        middleware=[HumanInTheLoopMiddleware(interrupt_on={"risky_tool": True})],
+        checkpointer=InMemorySaver(),
+    )
+    session = LangChainAgentSession(
+        agent=agent,
+        thread_id="thread-1",
+        reviewer=StaticApprovalReviewer(approve=True),
+        exit_stack=ExitStack(),
+    )
+
+    events = list(session.stream("run risky tool"))
+
+    assert StreamEvent(
+        type="approval_required",
+        thread_id="thread-1",
+    ) in events
+    assert events[-1] == StreamEvent(
+        type="done",
+        content="approved",
+        thread_id="thread-1",
+    )

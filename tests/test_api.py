@@ -164,7 +164,7 @@ def test_websocket_chat_passes_resolved_skill_source_records(tmp_path, monkeypat
         assert workspace_root == tmp_path
         return [source]
 
-    monkeypatch.setattr("easy_claw.api.main.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.api.main.LangChainAgentRuntime", FakeRuntime)
     monkeypatch.setattr("easy_claw.api.main.resolve_skill_sources", fake_resolve_skill_sources)
     client = TestClient(create_app(_test_config(tmp_path)))
 
@@ -217,7 +217,7 @@ def test_websocket_chat_can_resume_existing_session_by_prefix(tmp_path, monkeypa
 
     monkeypatch.setattr("easy_claw.api.main.initialize_product_db", lambda db_path: None)
     monkeypatch.setattr("easy_claw.api.main.SessionRepository", FakeSessionRepository)
-    monkeypatch.setattr("easy_claw.api.main.DeepAgentsRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.api.main.LangChainAgentRuntime", FakeRuntime)
     monkeypatch.setattr("easy_claw.api.main.resolve_skill_sources", lambda **kwargs: [])
     client = TestClient(create_app(_test_config(tmp_path)))
 

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from easy_claw.agent.middleware import build_agent_middleware
+from easy_claw.agent.skill_tools import build_skill_summary, build_skill_tool_bundle
 from easy_claw.agent.toolset import build_easy_claw_tools
 from easy_claw.agent.types import ToolContext
 from easy_claw.config import AppConfig
@@ -86,7 +87,7 @@ class ConsoleApprovalReviewer:
         return decisions
 
 
-class DeepAgentsRuntime:
+class LangChainAgentRuntime:
     def __init__(self, reviewer: ApprovalReviewer | None = None) -> None:
         self._reviewer = reviewer or ConsoleApprovalReviewer()
 
@@ -94,25 +95,25 @@ class DeepAgentsRuntime:
         with self.open_session(request) as session:
             return session.run(request.prompt)
 
-    def open_session(self, request: AgentRequest) -> DeepAgentSession:
+    def open_session(self, request: AgentRequest) -> LangChainAgentSession:
         if request.config is None:
-            raise RuntimeError("DeepAgentsRuntime 必须传入 config。")
+            raise RuntimeError("LangChainAgentRuntime 必须传入 config。")
         cfg = request.config
         if cfg.model is None:
             raise RuntimeError("运行聊天前请先设置 EASY_CLAW_MODEL。")
         if cfg.api_key is None:
             raise RuntimeError("运行聊天前请先设置 EASY_CLAW_API_KEY。")
         if cfg.checkpoint_db_path is None:
-            raise RuntimeError("DeepAgentsRuntime 必须配置 checkpoint_db_path。")
+            raise RuntimeError("LangChainAgentRuntime 必须配置 checkpoint_db_path。")
 
         cfg.checkpoint_db_path.parent.mkdir(parents=True, exist_ok=True)
-        system_prompt = _build_system_prompt()
+        system_prompt = _build_system_prompt(
+            skill_summary=build_skill_summary(request.skill_source_records),
+        )
         workspace_path = request.workspace_path or cfg.default_workspace
 
-        from deepagents import create_deep_agent
+        from langchain.agents import create_agent
         from langgraph.checkpoint.sqlite import SqliteSaver
-
-        skill_sources = _request_skill_source_paths(request)
 
         tool_bundle = build_easy_claw_tools(
             ToolContext(
@@ -126,27 +127,29 @@ class DeepAgentsRuntime:
             )
         )
         interrupt_on = _build_interrupt_on(cfg.approval_mode, tool_bundle.interrupt_on)
+        skill_tool_bundle = build_skill_tool_bundle(
+            skill_source_records=request.skill_source_records,
+        )
+        tools = [*tool_bundle.tools, *skill_tool_bundle.tools]
 
         stack = ExitStack()
         checkpointer = stack.enter_context(
             SqliteSaver.from_conn_string(str(cfg.checkpoint_db_path))
         )
-        agent = create_deep_agent(
+        agent = create_agent(
             model=_build_chat_model(cfg.model, cfg.base_url, cfg.api_key),
-            tools=tool_bundle.tools,
+            tools=tools,
             system_prompt=system_prompt,
-            skills=skill_sources or None,
             middleware=build_agent_middleware(
                 max_model_calls=cfg.max_model_calls,
                 max_tool_calls=cfg.max_tool_calls,
+                interrupt_on=interrupt_on,
             ),
-            backend=_build_agent_backend(workspace_path, request.skill_source_records),
             checkpointer=checkpointer,
-            interrupt_on=interrupt_on,
         )
         for cb in tool_bundle.cleanup:
             stack.callback(cb)
-        return DeepAgentSession(
+        return LangChainAgentSession(
             agent=agent,
             thread_id=request.thread_id,
             reviewer=self._reviewer,
@@ -154,7 +157,7 @@ class DeepAgentsRuntime:
         )
 
 
-class DeepAgentSession:
+class LangChainAgentSession:
     def __init__(
         self,
         *,
@@ -168,7 +171,7 @@ class DeepAgentSession:
         self._reviewer = reviewer
         self._exit_stack = exit_stack
 
-    def __enter__(self) -> DeepAgentSession:
+    def __enter__(self) -> LangChainAgentSession:
         return self
 
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
@@ -205,6 +208,10 @@ class DeepAgentSession:
         )
 
 
+DeepAgentsRuntime = LangChainAgentRuntime
+DeepAgentSession = LangChainAgentSession
+
+
 def _build_chat_model(model: str, base_url: str, api_key: str) -> object:
     from langchain_openai import ChatOpenAI
 
@@ -213,46 +220,6 @@ def _build_chat_model(model: str, base_url: str, api_key: str) -> object:
         api_key=api_key,
         base_url=base_url,
     )
-
-
-def _request_skill_source_paths(request: AgentRequest) -> list[str]:
-    paths: list[str] = []
-    for source in request.skill_sources:
-        if source not in paths:
-            paths.append(source)
-    for source in request.skill_source_records:
-        if source.backend_path not in paths:
-            paths.append(source.backend_path)
-    return paths
-
-
-def _build_agent_backend(
-    workspace_path: Path,
-    skill_source_records: Sequence[SkillSource],
-) -> object:
-    from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
-
-    workspace = workspace_path.expanduser().resolve(strict=False)
-    default_backend = LocalShellBackend(root_dir=workspace, virtual_mode=True)
-    routes = {}
-    for source in skill_source_records:
-        if _is_under_workspace(source.filesystem_path, workspace):
-            continue
-        routes[source.backend_path] = FilesystemBackend(
-            root_dir=source.filesystem_path,
-            virtual_mode=True,
-        )
-    if not routes:
-        return default_backend
-    return CompositeBackend(default=default_backend, routes=routes)
-
-
-def _is_under_workspace(path: Path, workspace: Path) -> bool:
-    try:
-        path.expanduser().resolve(strict=False).relative_to(workspace)
-    except ValueError:
-        return False
-    return True
 
 
 def _build_interrupt_on(
@@ -267,17 +234,20 @@ def _build_interrupt_on(
     return {}
 
 
-def _build_system_prompt() -> str:
-    return "\n\n".join(
-        [
-            "你是 easy-claw，一个 Windows 优先的个人代码助手。",
-            "用户会用自然语言描述任务；不要要求用户手动运行 docs、tools 或 dev 命令。",
-            "请主动使用可用工具读取文件、运行测试、分析项目和搜索网页。",
-            "除非用户明确要求其他路径，否则请在当前工作区内操作。",
-            "如果已通过 MCP 配置 Basic Memory 工具（write_note、search_notes、read_note 等），"
-            "请用它们记住重要事实，并在跨会话时检索过去信息。",
-        ]
-    )
+def _build_system_prompt(*, skill_summary: str = "") -> str:
+    parts = [
+        "你是 easy-claw，一个 Windows 优先的个人代码助手。",
+        "用户会用自然语言描述任务；不要要求用户手动运行 docs、tools 或 dev 命令。",
+        "请主动使用可用工具读取文件、运行测试、分析项目和搜索网页。",
+        "除非用户明确要求其他路径，否则请在当前工作区内操作。",
+        "easy-claw skills 通过 list_skills 和 read_skill 工具提供；"
+        "如果任务明显匹配某个 skill，请先读取完整说明再执行。",
+        "如果已通过 MCP 配置 Basic Memory 工具（write_note、search_notes、read_note 等），"
+        "请用它们记住重要事实，并在跨会话时检索过去信息。",
+    ]
+    if skill_summary:
+        parts.append(skill_summary)
+    return "\n\n".join(parts)
 
 
 def _extract_last_message_info(result: object) -> tuple[str, dict[str, int] | None]:
@@ -331,8 +301,15 @@ def _stream_with_approval(
     while True:
         interrupted = False
         try:
-            for stream_item in agent.stream(next_input, config, stream_mode="messages"):
-                interrupts = _extract_interrupts(stream_item)
+            for stream_item in agent.stream(
+                next_input,
+                config,
+                stream_mode=["messages", "updates"],
+                version="v2",
+            ):
+                mode, payload = _stream_item_payload(stream_item)
+
+                interrupts = _extract_interrupts(payload)
                 if interrupts:
                     yield StreamEvent(type="approval_required", thread_id=thread_id)
                     decisions = reviewer.review(interrupts)
@@ -340,15 +317,25 @@ def _stream_with_approval(
                     interrupted = True
                     break
 
-                msg = _message_from_stream_item(stream_item)
-                msg_usage = _usage_from_message(msg)
-                if msg_usage is not None:
-                    usage = msg_usage
-
-                for event in _events_from_stream_item(stream_item, thread_id=thread_id):
-                    if event.type == "token":
-                        content += event.content
-                    yield event
+                if mode == "updates":
+                    msg = _last_completed_message(payload)
+                    msg_usage = _usage_from_message(msg)
+                    if msg_usage is not None:
+                        usage = msg_usage
+                    tool_result = _tool_result_event_from_message(
+                        msg, thread_id=thread_id
+                    )
+                    if tool_result is not None:
+                        yield tool_result
+                else:
+                    msg = _message_from_stream_item(stream_item)
+                    msg_usage = _usage_from_message(msg)
+                    if msg_usage is not None:
+                        usage = msg_usage
+                    for event in _events_from_message(msg, thread_id=thread_id):
+                        if event.type == "token":
+                            content += event.content
+                        yield event
         except Exception as exc:
             error_content = _format_agent_runtime_error(exc)
             yield StreamEvent(type="error", content=error_content, thread_id=thread_id)
@@ -370,8 +357,9 @@ def _format_agent_runtime_error(exc: Exception) -> str:
     return f"Agent 执行失败：{message}"
 
 
-def _events_from_stream_item(stream_item: object, *, thread_id: str) -> list[StreamEvent]:
-    message = _message_from_stream_item(stream_item)
+def _events_from_message(message: object, *, thread_id: str) -> list[StreamEvent]:
+    if message is None:
+        return []
     events: list[StreamEvent] = []
     events.extend(_tool_call_events_from_message(message, thread_id=thread_id))
 
@@ -387,9 +375,36 @@ def _events_from_stream_item(stream_item: object, *, thread_id: str) -> list[Str
 
 
 def _message_from_stream_item(stream_item: object) -> object:
-    if isinstance(stream_item, tuple):
-        return stream_item[0]
-    return stream_item
+    mode, payload = _stream_item_payload(stream_item)
+    if mode == "updates":
+        return None
+    if isinstance(payload, tuple):
+        return payload[0]
+    return payload
+
+
+def _stream_item_payload(stream_item: object) -> tuple[str | None, object]:
+    if isinstance(stream_item, dict) and "type" in stream_item:
+        return stream_item["type"], stream_item["data"]
+    if (
+        isinstance(stream_item, tuple)
+        and len(stream_item) == 2
+        and isinstance(stream_item[0], str)
+    ):
+        return stream_item[0], stream_item[1]
+    return None, stream_item
+
+
+def _last_completed_message(payload: object) -> object | None:
+    if not isinstance(payload, dict):
+        return None
+    for source in ("model", "tools"):
+        update = payload.get(source)
+        if isinstance(update, dict):
+            messages = update.get("messages")
+            if messages:
+                return messages[-1]
+    return None
 
 
 def _usage_from_message(message: object) -> dict[str, int] | None:
