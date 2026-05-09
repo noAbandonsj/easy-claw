@@ -373,18 +373,34 @@ body {
 </head>
 <body>
 
-<div id="banner">
-    <span class="dot" id="conn-dot"></span>
-    <span class="logo">easy-claw</span>
-    <span class="info" id="banner-info">连接中...</span>
-</div>
-
-<div id="messages"></div>
-<div id="status-line"></div>
-
-<div id="input-area">
-    <textarea id="input" rows="1" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" disabled></textarea>
-    <button id="send-btn" disabled>发送</button>
+<div id="app">
+    <nav id="sidebar">
+        <div class="sb-header">
+            <div class="sb-logo">
+                <span class="icon">&#9670; easy-claw</span>
+                <span class="ver">v0.5</span>
+            </div>
+            <button id="new-chat-btn">+ 新对话</button>
+        </div>
+        <div id="session-list"></div>
+        <div id="sb-status">
+            <div class="status-row"><span>模型</span><span class="val cyan" id="sb-model">-</span></div>
+            <div class="status-row"><span>工作区</span><span class="val" id="sb-workspace">-</span></div>
+            <div class="status-row"><span>Token</span><span class="val pink" id="sb-tokens">0</span></div>
+        </div>
+    </nav>
+    <div id="main-area">
+        <div id="topbar">
+            <span id="conn-dot" class="disconnected"></span>
+            <span id="topbar-title">easy-claw</span>
+            <span id="topbar-status">连接中...</span>
+        </div>
+        <div id="messages"></div>
+        <div id="input-area">
+            <textarea id="input" rows="1" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" disabled></textarea>
+            <button id="send-btn" disabled>发送</button>
+        </div>
+    </div>
 </div>
 
 <div class="modal-overlay" id="modal-overlay">
