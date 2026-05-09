@@ -411,11 +411,16 @@ body {
 const msgEl = document.getElementById('messages');
 const inputEl = document.getElementById('input');
 const sendBtn = document.getElementById('send-btn');
-const statusEl = document.getElementById('status-line');
 const dotEl = document.getElementById('conn-dot');
-const bannerInfo = document.getElementById('banner-info');
+const topbarTitle = document.getElementById('topbar-title');
+const topbarStatus = document.getElementById('topbar-status');
 const modalOverlay = document.getElementById('modal-overlay');
 const modalContent = document.getElementById('modal-content');
+const sessionListEl = document.getElementById('session-list');
+const newChatBtn = document.getElementById('new-chat-btn');
+const sbModel = document.getElementById('sb-model');
+const sbWorkspace = document.getElementById('sb-workspace');
+const sbTokens = document.getElementById('sb-tokens');
 
 let ws = null;
 let currentAssistant = null;
@@ -426,6 +431,7 @@ let sessionId = '';
 let turnCount = 0;
 let totalTokens = {};
 let slashCommands = null;
+let sessions = [];
 
 function buildWsUrl(resumeSessionId) {
     let url = 'ws://' + location.host + '/ws/chat';
@@ -442,13 +448,14 @@ function connect(resumeSessionId) {
         dotEl.classList.remove('disconnected');
         inputEl.disabled = false;
         sendBtn.disabled = false;
+        topbarStatus.textContent = '就绪';
     };
     socket.onclose = () => {
         if (socket !== ws) return;
         dotEl.classList.add('disconnected');
         inputEl.disabled = true;
         sendBtn.disabled = true;
-        statusEl.textContent = '连接已断开，2 秒后重连...';
+        topbarStatus.textContent = '连接已断开，2 秒后重连...';
         setTimeout(() => connect(resumeSessionId), 2000);
     };
     socket.onmessage = (e) => {
@@ -473,8 +480,10 @@ function handleMessage(msg) {
             workspace = msg.workspace || '';
             version = msg.version || '';
             sessionId = msg.session_id || '';
-            bannerInfo.textContent = '模型：' + modelName + ' | 工作区：' + workspace + ' | v' + version + ' | ' + sessionId;
-            statusEl.textContent = '就绪';
+            updateTopbar();
+            updateStatusBar();
+            topbarStatus.textContent = '就绪';
+            loadSessions();
             break;
         case 'token':
             appendToken(msg.content);
@@ -482,25 +491,28 @@ function handleMessage(msg) {
         case 'tool_call_start':
             finishAssistant();
             addToolPanel('call', msg.tool_name, msg.tool_args);
+            topbarStatus.textContent = '调用工具：' + (msg.tool_name || '未知');
             break;
         case 'tool_call_result':
             addToolPanel('result', msg.tool_name, msg.tool_result || msg.content);
+            topbarStatus.textContent = '就绪';
             break;
         case 'approval_required':
             finishAssistant();
-            statusEl.textContent = '工具执行需要确认（已自动批准）';
+            topbarStatus.textContent = '工具执行需要确认（已自动批准）';
             break;
         case 'done':
             finishAssistant();
             if (msg.usage) {
                 totalTokens = msg.usage;
-                statusEl.textContent = 'Token：输入 ' + (msg.usage.input||0) + ' / 输出 ' + (msg.usage.output||0) + ' / 总计 ' + (msg.usage.total||0);
+                updateStatusBar();
             }
             turnCount++;
+            topbarStatus.textContent = '就绪';
             break;
         case 'error':
             finishAssistant();
-            statusEl.textContent = '错误：' + msg.content;
+            topbarStatus.textContent = '错误：' + msg.content;
             break;
     }
     scrollBottom();
@@ -568,7 +580,6 @@ function send() {
         return;
     }
 
-    // 用户消息气泡
     const userMsg = document.createElement('div');
     userMsg.className = 'message user';
     userMsg.textContent = text;
@@ -577,7 +588,7 @@ function send() {
     ws.send(text);
     inputEl.value = '';
     inputEl.style.height = '';
-    statusEl.textContent = '思考中...';
+    topbarStatus.textContent = '思考中...';
 }
 
 async function loadSlashCommands() {
@@ -601,6 +612,91 @@ async function fetchJson(path) {
     return response.json();
 }
 
+async function postJson(path, body) {
+    const resp = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+        let detail = resp.statusText;
+        try { const p = await resp.json(); detail = p.detail || detail; } catch (e) {}
+        throw new Error(detail);
+    }
+    return resp.json();
+}
+
+async function loadSessions() {
+    try {
+        sessions = await fetchJson('/sessions');
+    } catch (e) {
+        sessions = [];
+    }
+    renderSessionList();
+}
+
+function renderSessionList() {
+    if (sessions.length === 0) {
+        sessionListEl.innerHTML = '<div style="padding:12px;font-size:11px;color:var(--dim);text-align:center;">暂无会话</div>';
+        return;
+    }
+    sessionListEl.innerHTML = sessions.map(s => {
+        const active = s.id === sessionId ? ' active' : '';
+        const time = relativeTime(s.updated_at);
+        return '<div class="session-item' + active + '" data-sid="' + s.id + '" onclick="switchSession(\'' + s.id + '\')">' +
+            '<div class="sess-title">' + escapeHtml(s.title || '未命名') + '</div>' +
+            '<div class="sess-meta"><span>' + escapeHtml(s.model || '-') + '</span><span>' + time + '</span></div>' +
+            '</div>';
+    }).join('');
+}
+
+function relativeTime(iso) {
+    if (!iso) return '';
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return '刚刚';
+    if (mins < 60) return mins + '分钟前';
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + '小时前';
+    return Math.floor(hours / 24) + '天前';
+}
+
+async function switchSession(targetId) {
+    if (targetId === sessionId) return;
+    const oldSocket = ws;
+    msgEl.innerHTML = '';
+    currentAssistant = null;
+    turnCount = 0;
+    totalTokens = {};
+    sessionId = targetId;
+    renderSessionList();
+    updateStatusBar();
+    topbarStatus.textContent = '切换会话中...';
+    connect(targetId);
+    if (oldSocket && oldSocket.readyState !== WebSocket.CLOSED) oldSocket.close();
+}
+
+async function newChat() {
+    try {
+        const created = await postJson('/sessions', { title: '新会话' });
+        topbarStatus.textContent = '已创建新会话';
+        await loadSessions();
+        switchSession(created.id);
+    } catch (e) {
+        topbarStatus.textContent = '创建失败：' + e.message;
+    }
+}
+
+function updateStatusBar() {
+    sbModel.textContent = modelName || '-';
+    sbWorkspace.textContent = workspace || '-';
+    sbTokens.textContent = (totalTokens.total || 0).toLocaleString();
+}
+
+function updateTopbar() {
+    topbarTitle.textContent = sessionId ? sessionId.slice(0, 8) : 'easy-claw';
+}
+
 async function handleSlash(cmd) {
     const parts = cmd.trim().split(/\s+/);
     const token = parts[0].toLowerCase();
@@ -612,7 +708,7 @@ async function handleSlash(cmd) {
             break;
         case '/clear':
             msgEl.innerHTML = '';
-            statusEl.textContent = '已清空对话视图（服务端会话仍保留）';
+            topbarStatus.textContent = '已清空对话视图（服务端会话仍保留）';
             break;
         case '/status':
             showModal(
@@ -650,18 +746,18 @@ async function handleSlash(cmd) {
         case 'exit':
         case 'quit':
         case ':q':
-            statusEl.textContent = '已断开连接';
+            topbarStatus.textContent = '已断开连接';
             disconnect();
             break;
         default:
             if (['/workspace', '/model', '/doctor', '/delete-session'].includes(token)) {
-                statusEl.textContent = token + ' 目前仅支持 CLI。请使用 uv run easy-claw。';
+                topbarStatus.textContent = token + ' 目前仅支持 CLI。请使用 uv run easy-claw。';
             } else {
-                statusEl.textContent = '未知命令：' + cmd;
+                topbarStatus.textContent = '未知命令：' + cmd;
             }
         }
     } catch (e) {
-        statusEl.textContent = '命令执行失败：' + e.message;
+        topbarStatus.textContent = '命令执行失败：' + e.message;
     }
 }
 
@@ -674,7 +770,7 @@ async function showCommandHelp(commandName) {
         }
         const command = commands.find(c => c.name === normalized || (c.aliases || []).includes(normalized));
         if (!command) {
-            statusEl.textContent = '未知命令：' + commandName;
+            topbarStatus.textContent = '未知命令：' + commandName;
             return;
         }
         showModal(
@@ -754,18 +850,11 @@ async function showSessions() {
 
 async function resumeSession(sessionPrefix) {
     if (!sessionPrefix) {
-        statusEl.textContent = '用法：/resume <session-id>';
+        topbarStatus.textContent = '用法：/resume <session-id>';
         return;
     }
     const session = await fetchJson('/sessions/resolve/' + encodeURIComponent(sessionPrefix));
-    const oldSocket = ws;
-    msgEl.innerHTML = '';
-    currentAssistant = null;
-    turnCount = 0;
-    totalTokens = {};
-    statusEl.textContent = '正在恢复会话 ' + session.id.slice(0, 8) + '...';
-    connect(session.id);
-    if (oldSocket && oldSocket.readyState !== WebSocket.CLOSED) oldSocket.close();
+    switchSession(session.id);
 }
 
 function yesNo(value) {
@@ -809,7 +898,7 @@ function downloadMarkdown() {
     a.href = URL.createObjectURL(blob);
     a.download = 'easy-claw-' + sessionId + '.md';
     a.click();
-    statusEl.textContent = '对话记录已下载';
+    topbarStatus.textContent = '对话记录已下载';
 }
 
 inputEl.addEventListener('keydown', (e) => {
@@ -826,11 +915,14 @@ inputEl.addEventListener('input', () => {
 
 sendBtn.addEventListener('click', send);
 
+newChatBtn.addEventListener('click', newChat);
+
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeModal();
 });
 
 connect();
+loadSessions();
 </script>
 </body>
 </html>
