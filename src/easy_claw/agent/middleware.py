@@ -4,6 +4,7 @@ from langchain.agents.middleware import (
     HumanInTheLoopMiddleware,
     ModelCallLimitMiddleware,
     SummarizationMiddleware,
+    TodoListMiddleware,
     ToolCallLimitMiddleware,
 )
 
@@ -22,6 +23,7 @@ def build_agent_middleware(
         middleware.append(ModelCallLimitMiddleware(run_limit=max_model_calls))
     if max_tool_calls is not None:
         middleware.append(ToolCallLimitMiddleware(run_limit=max_tool_calls))
+    middleware.append(TodoListMiddleware())
     if interrupt_on:
         middleware.append(HumanInTheLoopMiddleware(interrupt_on=interrupt_on))
     if summarization_model is not None:

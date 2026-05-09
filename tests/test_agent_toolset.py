@@ -11,16 +11,26 @@ def test_build_easy_claw_tools_returns_core_tools_without_browser(tmp_path):
         )
     )
 
-    assert [tool.name for tool in bundle.tools] == [
+    names = {tool.name for tool in bundle.tools}
+    assert names == {
         "search_web",
         "run_command",
         "run_python",
         "read_document",
-    ]
-    assert bundle.interrupt_on == {
-        "run_command": True,
-        "run_python": True,
+        "read_file",
+        "write_file",
+        "list_directory",
+        "file_delete",
+        "file_search",
+        "copy_file",
+        "move_file",
+        "edit_file",
     }
+    assert bundle.interrupt_on["run_command"] is True
+    assert bundle.interrupt_on["run_python"] is True
+    assert bundle.interrupt_on["write_file"] is True
+    assert bundle.interrupt_on["file_delete"] is True
+    assert bundle.interrupt_on["edit_file"] is True
     assert bundle.cleanup == ()
 
 
