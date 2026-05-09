@@ -11,10 +11,11 @@ from easy_claw.agent.types import ToolBundle
 from easy_claw.tools.base import ToolExecutionError, get_background_loop
 
 try:
-    from langchain_core.tools import StructuredTool
+    from langchain_core.tools import StructuredTool, ToolException
     from langchain_mcp_adapters.client import MultiServerMCPClient
 except ImportError:  # pragma: no cover
     StructuredTool = None
+    ToolException = None
     MultiServerMCPClient = None
 
 _ENV_REF_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
@@ -92,8 +93,21 @@ def _ensure_sync_invocation(tool: object, loop) -> object:
 
     async_call = tool.coroutine
 
+    async def async_call_with_error_boundary(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return await async_call(*args, **kwargs)
+        except ToolException:
+            raise
+        except Exception as exc:
+            raise ToolException(_format_mcp_tool_error(tool.name, exc)) from exc
+
     def sync_call(*args: Any, **kwargs: Any) -> Any:
-        return loop.run_coroutine(async_call(*args, **kwargs))
+        try:
+            return loop.run_coroutine(async_call_with_error_boundary(*args, **kwargs))
+        except ToolException:
+            raise
+        except Exception as exc:
+            raise ToolException(_format_mcp_tool_error(tool.name, exc)) from exc
 
     return StructuredTool(
         name=tool.name,
@@ -104,13 +118,18 @@ def _ensure_sync_invocation(tool: object, loop) -> object:
         callbacks=tool.callbacks,
         tags=tool.tags,
         metadata=tool.metadata,
-        handle_tool_error=tool.handle_tool_error,
-        handle_validation_error=tool.handle_validation_error,
+        handle_tool_error=True,
+        handle_validation_error=True,
         response_format=tool.response_format,
         extras=tool.extras,
         func=sync_call,
-        coroutine=tool.coroutine,
+        coroutine=async_call_with_error_boundary,
     )
+
+
+def _format_mcp_tool_error(tool_name: str, exc: Exception) -> str:
+    message = str(exc).strip() or exc.__class__.__name__
+    return f"MCP 工具 '{tool_name}' 调用失败：{message}"
 
 
 def _mcp_mode(enabled: bool | str) -> str:

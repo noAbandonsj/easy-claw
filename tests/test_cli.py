@@ -162,6 +162,28 @@ def test_render_streaming_turn_prints_tokens_and_tool_panels(monkeypatch):
     assert "# Project" in rendered
 
 
+def test_render_streaming_turn_prints_error_event(monkeypatch):
+    output = StringIO()
+    test_console = Console(file=output, force_terminal=False, color_system=None, width=100)
+    monkeypatch.setattr("easy_claw.cli_interactive.console", test_console)
+
+    from easy_claw.cli_interactive import _render_streaming_turn
+
+    response, usage = _render_streaming_turn(
+        iter(
+            [
+                StreamEvent(type="error", content="Agent 执行失败：tool backend died"),
+                StreamEvent(type="done", content="Agent 执行失败：tool backend died"),
+            ]
+        )
+    )
+
+    rendered = output.getvalue()
+    assert "Agent 执行失败：tool backend died" in rendered
+    assert response == "Agent 执行失败：tool backend died"
+    assert usage is None
+
+
 def test_chat_interactive_uses_stream_when_session_supports_it(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")

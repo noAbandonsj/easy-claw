@@ -178,13 +178,17 @@ class DeepAgentSession:
         self._exit_stack.close()
 
     def run(self, prompt: str) -> AgentResult:
-        result = _invoke_with_approval(
-            self._agent,
-            {"messages": [{"role": "user", "content": prompt}]},
-            config={"configurable": {"thread_id": self._thread_id}},
-            reviewer=self._reviewer,
-        )
-        content, usage = _extract_last_message_info(result)
+        try:
+            result = _invoke_with_approval(
+                self._agent,
+                {"messages": [{"role": "user", "content": prompt}]},
+                config={"configurable": {"thread_id": self._thread_id}},
+                reviewer=self._reviewer,
+            )
+            content, usage = _extract_last_message_info(result)
+        except Exception as exc:
+            content = _format_agent_runtime_error(exc)
+            usage = None
         return AgentResult(
             content=content,
             thread_id=self._thread_id,
@@ -326,29 +330,44 @@ def _stream_with_approval(
 
     while True:
         interrupted = False
-        for stream_item in agent.stream(next_input, config, stream_mode="messages"):
-            interrupts = _extract_interrupts(stream_item)
-            if interrupts:
-                yield StreamEvent(type="approval_required", thread_id=thread_id)
-                decisions = reviewer.review(interrupts)
-                next_input = Command(resume={"decisions": decisions})
-                interrupted = True
-                break
+        try:
+            for stream_item in agent.stream(next_input, config, stream_mode="messages"):
+                interrupts = _extract_interrupts(stream_item)
+                if interrupts:
+                    yield StreamEvent(type="approval_required", thread_id=thread_id)
+                    decisions = reviewer.review(interrupts)
+                    next_input = Command(resume={"decisions": decisions})
+                    interrupted = True
+                    break
 
-            msg = _message_from_stream_item(stream_item)
-            msg_usage = _usage_from_message(msg)
-            if msg_usage is not None:
-                usage = msg_usage
+                msg = _message_from_stream_item(stream_item)
+                msg_usage = _usage_from_message(msg)
+                if msg_usage is not None:
+                    usage = msg_usage
 
-            for event in _events_from_stream_item(stream_item, thread_id=thread_id):
-                if event.type == "token":
-                    content += event.content
-                yield event
+                for event in _events_from_stream_item(stream_item, thread_id=thread_id):
+                    if event.type == "token":
+                        content += event.content
+                    yield event
+        except Exception as exc:
+            error_content = _format_agent_runtime_error(exc)
+            yield StreamEvent(type="error", content=error_content, thread_id=thread_id)
+            if content:
+                content = f"{content}\n{error_content}"
+            else:
+                content = error_content
+            yield StreamEvent(type="done", content=content, thread_id=thread_id, usage=usage)
+            return
 
         if not interrupted:
             break
 
     yield StreamEvent(type="done", content=content, thread_id=thread_id, usage=usage)
+
+
+def _format_agent_runtime_error(exc: Exception) -> str:
+    message = str(exc).strip() or exc.__class__.__name__
+    return f"Agent 执行失败：{message}"
 
 
 def _events_from_stream_item(stream_item: object, *, thread_id: str) -> list[StreamEvent]:

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from langchain_core.tools import StructuredTool
+from langchain_core.tools import StructuredTool, ToolException
 
 from easy_claw.tools.base import ToolExecutionError
 from easy_claw.tools.mcp import _read_servers_config, build_mcp_tools
@@ -313,3 +313,82 @@ class TestBuildMcpToolsSuccess:
         bundle = build_mcp_tools(enabled=True, config_path=str(config_file))
 
         assert bundle.tools[0].invoke({"city": "上海"}) == "上海 ok"
+
+    def test_mcp_tool_exception_returns_tool_result_instead_of_raising(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        config_file = tmp_path / "servers.json"
+        config_file.write_text('{"srv": {"command": "npx", "args": [], "transport": "stdio"}}')
+
+        async def fail_lookup(city: str) -> str:
+            """查询天气。"""
+            raise ToolException("远端 MCP 服务拒绝调用")
+
+        failing_tool = StructuredTool.from_function(
+            coroutine=fail_lookup,
+            name="maps_weather",
+            description="天气查询",
+        )
+
+        class FakeClient:
+            def __init__(self, config):
+                pass
+
+            async def get_tools(self):
+                return [failing_tool]
+
+            async def close(self):
+                pass
+
+        monkeypatch.setattr(
+            "easy_claw.tools.mcp.MultiServerMCPClient",
+            FakeClient,
+            raising=False,
+        )
+
+        bundle = build_mcp_tools(enabled=True, config_path=str(config_file))
+
+        assert "远端 MCP 服务拒绝调用" in bundle.tools[0].invoke({"city": "上海"})
+
+    def test_mcp_runtime_exception_returns_tool_result_instead_of_raising(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        config_file = tmp_path / "servers.json"
+        config_file.write_text('{"srv": {"command": "npx", "args": [], "transport": "stdio"}}')
+
+        async def fail_lookup(city: str) -> str:
+            """查询天气。"""
+            raise RuntimeError("connection closed")
+
+        failing_tool = StructuredTool.from_function(
+            coroutine=fail_lookup,
+            name="maps_weather",
+            description="天气查询",
+        )
+
+        class FakeClient:
+            def __init__(self, config):
+                pass
+
+            async def get_tools(self):
+                return [failing_tool]
+
+            async def close(self):
+                pass
+
+        monkeypatch.setattr(
+            "easy_claw.tools.mcp.MultiServerMCPClient",
+            FakeClient,
+            raising=False,
+        )
+
+        bundle = build_mcp_tools(enabled=True, config_path=str(config_file))
+
+        result = bundle.tools[0].invoke({"city": "上海"})
+
+        assert "MCP 工具 'maps_weather' 调用失败" in result
+        assert "connection closed" in result

@@ -7,6 +7,7 @@ from langgraph.types import Command
 
 from easy_claw.agent.runtime import (
     AgentRequest,
+    AgentResult,
     DeepAgentSession,
     DeepAgentsRuntime,
     StaticApprovalReviewer,
@@ -397,6 +398,27 @@ def test_deepagents_session_reuses_agent_between_turns(tmp_path, monkeypatch):
     assert captured["agent"].prompts == ["first", "second"]
 
 
+class FakeFailingInvokeAgent:
+    def invoke(self, input_value, config):
+        raise RuntimeError("tool backend died")
+
+
+def test_deepagent_session_run_returns_error_result_when_agent_raises():
+    session = DeepAgentSession(
+        agent=FakeFailingInvokeAgent(),
+        thread_id="thread-1",
+        reviewer=StaticApprovalReviewer(approve=True),
+        exit_stack=ExitStack(),
+    )
+
+    result = session.run("call broken tool")
+
+    assert result == AgentResult(
+        content="Agent 执行失败：tool backend died",
+        thread_id="thread-1",
+    )
+
+
 @dataclass
 class FakeStreamMessage:
     content: str
@@ -555,6 +577,45 @@ def test_deepagent_session_stream_done_content_ignores_tool_results():
         content="final answer",
         thread_id="thread-1",
     )
+
+
+class FakeStreamingFailureAgent:
+    def stream(self, input_value, config, stream_mode):
+        yield FakeToolCallMessage(
+            content="",
+            tool_calls=[{"name": "maps_weather", "args": {"city": "上海"}}],
+        )
+        raise RuntimeError("tool backend died")
+
+
+def test_deepagent_session_stream_yields_error_event_when_agent_stream_raises():
+    session = DeepAgentSession(
+        agent=FakeStreamingFailureAgent(),
+        thread_id="thread-1",
+        reviewer=StaticApprovalReviewer(approve=True),
+        exit_stack=ExitStack(),
+    )
+
+    events = list(session.stream("call broken mcp tool"))
+
+    assert events == [
+        StreamEvent(
+            type="tool_call_start",
+            tool_name="maps_weather",
+            tool_args={"city": "上海"},
+            thread_id="thread-1",
+        ),
+        StreamEvent(
+            type="error",
+            content="Agent 执行失败：tool backend died",
+            thread_id="thread-1",
+        ),
+        StreamEvent(
+            type="done",
+            content="Agent 执行失败：tool backend died",
+            thread_id="thread-1",
+        ),
+    ]
 
 
 class FakeStreamingInterruptAgent:

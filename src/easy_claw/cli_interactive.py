@@ -272,6 +272,12 @@ def _render_streaming_turn(events: Iterable[StreamEvent]) -> tuple[str, dict[str
                 _print_stream_separator(printed_token)
                 console.print("[yellow]工具执行需要确认[/]")
                 printed_token = False
+            elif event.type == "error":
+                _print_stream_separator(printed_token)
+                if event.content:
+                    console.print(f"[red]{escape(event.content)}[/]")
+                    tokens.append(event.content)
+                printed_token = False
             elif event.type == "done":
                 if spinner_running:
                     spinner.stop()
