@@ -183,9 +183,10 @@ def test_langchain_runtime_uses_create_agent_and_core_tools(tmp_path, monkeypatc
         captured.update(kwargs)
         return FakeAgent()
 
+    chat_model = FakeMessagesListChatModel(responses=[])
     monkeypatch.setattr(
         "easy_claw.agent.runtime._build_chat_model",
-        lambda model, base_url, api_key: "chat-model",
+        lambda model, base_url, api_key: chat_model,
     )
     monkeypatch.setattr("langchain.agents.create_agent", fake_create_agent)
 
@@ -203,7 +204,7 @@ def test_langchain_runtime_uses_create_agent_and_core_tools(tmp_path, monkeypatc
     )
 
     assert result.content == "done"
-    assert captured["model"] == "chat-model"
+    assert isinstance(captured["model"], FakeMessagesListChatModel)
     assert "skills" not in captured
     assert "backend" not in captured
     assert "interrupt_on" not in captured
@@ -240,9 +241,10 @@ def test_langchain_runtime_does_not_route_external_skill_sources_through_backend
         captured.update(kwargs)
         return FakeAgent()
 
+    chat_model = FakeMessagesListChatModel(responses=[])
     monkeypatch.setattr(
         "easy_claw.agent.runtime._build_chat_model",
-        lambda model, base_url, api_key: "chat-model",
+        lambda model, base_url, api_key: chat_model,
     )
     monkeypatch.setattr("langchain.agents.create_agent", fake_create_agent)
 
@@ -299,9 +301,10 @@ def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkey
             },
         )()
 
+    chat_model = FakeMessagesListChatModel(responses=[])
     monkeypatch.setattr(
         "easy_claw.agent.runtime._build_chat_model",
-        lambda model, base_url, api_key: "chat-model",
+        lambda model, base_url, api_key: chat_model,
     )
     monkeypatch.setattr("langchain.agents.create_agent", fake_create_agent)
     monkeypatch.setattr(
@@ -336,7 +339,7 @@ def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkey
     assert captured["tool_context"].mcp_config_path == "mcp_servers.json"
     assert fake_browser_tool in captured["tools"]
     assert "interrupt_on" not in captured
-    assert isinstance(captured["middleware"][-1], HumanInTheLoopMiddleware)
+    assert any(isinstance(m, HumanInTheLoopMiddleware) for m in captured["middleware"])
     assert cleanup_calls == ["cleanup"]
 
 
@@ -356,9 +359,10 @@ def test_deepagents_session_reuses_agent_between_turns(tmp_path, monkeypatch):
         captured["agent"] = FakeAgent()
         return captured["agent"]
 
+    chat_model = FakeMessagesListChatModel(responses=[])
     monkeypatch.setattr(
         "easy_claw.agent.runtime._build_chat_model",
-        lambda model, base_url, api_key: "chat-model",
+        lambda model, base_url, api_key: chat_model,
     )
     monkeypatch.setattr("langchain.agents.create_agent", fake_create_agent)
 

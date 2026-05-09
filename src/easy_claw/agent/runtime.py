@@ -131,19 +131,21 @@ class LangChainAgentRuntime:
             skill_source_records=request.skill_source_records,
         )
         tools = [*tool_bundle.tools, *skill_tool_bundle.tools]
+        chat_model = _build_chat_model(cfg.model, cfg.base_url, cfg.api_key)
 
         stack = ExitStack()
         checkpointer = stack.enter_context(
             SqliteSaver.from_conn_string(str(cfg.checkpoint_db_path))
         )
         agent = create_agent(
-            model=_build_chat_model(cfg.model, cfg.base_url, cfg.api_key),
+            model=chat_model,
             tools=tools,
             system_prompt=system_prompt,
             middleware=build_agent_middleware(
                 max_model_calls=cfg.max_model_calls,
                 max_tool_calls=cfg.max_tool_calls,
                 interrupt_on=interrupt_on,
+                summarization_model=chat_model,
             ),
             checkpointer=checkpointer,
         )
