@@ -25,7 +25,7 @@ from easy_claw.config import AppConfig
 from easy_claw.storage.db import initialize_product_db
 from easy_claw.storage.repositories import AuditRepository, SessionRepository
 
-STREAM_PANEL_VALUE_LIMIT = 1200
+STREAM_PANEL_VALUE_LIMIT = 200
 PROMPT_RULE_STYLE = "light_pink1"
 
 
