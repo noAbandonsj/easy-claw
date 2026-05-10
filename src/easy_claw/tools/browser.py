@@ -94,12 +94,18 @@ def build_browser_tools(*, enabled: bool, headless: bool) -> ToolBundle:
 def _close_browser_callback(loop, pw, browser):
     def close_browser() -> None:
         async def _close():
-            await browser.close()
-            await pw.stop()
+            try:
+                await browser.close()
+            except Exception:
+                pass
+            try:
+                await pw.stop()
+            except Exception:
+                pass
 
         try:
             loop.run_coroutine(_close())
-        except (RuntimeError, OSError):
+        except Exception:
             pass
 
     return close_browser

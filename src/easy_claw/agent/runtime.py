@@ -181,7 +181,10 @@ class LangChainAgentSession:
         self.close()
 
     def close(self) -> None:
-        self._exit_stack.close()
+        try:
+            self._exit_stack.close()
+        except Exception:
+            pass
 
     def run(self, prompt: str) -> AgentResult:
         try:
