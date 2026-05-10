@@ -335,16 +335,20 @@ def test_interactive_prompt_avoids_raw_ansi_in_captured_output(tmp_path, monkeyp
     assert "\x1b[" not in result.stdout
 
 
-def test_terminal_prompt_renders_light_pink_rules_before_input_and_clears_them(monkeypatch):
+def test_terminal_prompt_fallback_keeps_original_three_line_frame(monkeypatch):
     output = StringIO()
     test_console = Console(file=output, force_terminal=True, color_system="256", width=16)
     monkeypatch.setattr("easy_claw.cli_interactive.console", test_console)
     output_before_input = []
 
+    def broken_frame_runner(_rule):
+        raise RuntimeError("not a real terminal")
+
     def fake_input():
         output_before_input.append(output.getvalue())
         return "hello"
 
+    monkeypatch.setattr("easy_claw.cli_interactive._run_prompt_toolkit_frame", broken_frame_runner)
     monkeypatch.setattr("builtins.input", fake_input)
 
     from easy_claw.cli_interactive import _read_interactive_prompt
@@ -361,35 +365,41 @@ def test_terminal_prompt_renders_light_pink_rules_before_input_and_clears_them(m
     assert rendered.count("\x1b[2K") == 3
 
 
-def test_terminal_prompt_toolkit_path_does_not_echo_input_twice(monkeypatch):
+def test_terminal_prompt_toolkit_frame_is_erased_after_submit(monkeypatch):
     output = StringIO()
     test_console = Console(file=output, force_terminal=True, color_system="256", width=40)
     monkeypatch.setattr("easy_claw.cli_interactive.console", test_console)
-    output_before_prompt = []
-    prompt_kwargs = []
+    captured_rules = []
 
-    class FakePromptSession:
-        def prompt(self, *_args, **kwargs):
-            output_before_prompt.append(output.getvalue())
-            prompt_kwargs.append(kwargs)
-            output.write("> hello\n")
-            return "hello"
+    def fake_frame_runner(rule):
+        captured_rules.append(rule)
+        return "hello"
 
-    monkeypatch.setattr("easy_claw.cli_interactive._get_pt_session", lambda: FakePromptSession())
-
+    monkeypatch.setattr("easy_claw.cli_interactive._run_prompt_toolkit_frame", fake_frame_runner)
     from easy_claw.cli_interactive import _read_interactive_prompt
 
     assert _read_interactive_prompt() == "hello"
-    rendered_before_prompt = output_before_prompt[0]
-    assert rendered_before_prompt.count("\u2500" * 40) == 1
-    assert prompt_kwargs[0]["bottom_toolbar"] == [("class:rule", "\u2500" * 40)]
-    assert "38;5;217" in rendered_before_prompt
-    assert "38;5;206" not in rendered_before_prompt
-    assert prompt_kwargs[0]["style"].style_rules == [
-        ("prompt", "#ffafaf bold"),
-        ("rule", "#ffafaf"),
-    ]
+    assert captured_rules == ["\u2500" * 40]
     assert output.getvalue().count("hello") == 1
+
+
+def test_prompt_toolkit_frame_places_bottom_rule_after_input_buffer():
+    from prompt_toolkit.layout.containers import HSplit, Window
+    from prompt_toolkit.output import DummyOutput
+
+    from easy_claw.cli_interactive import _build_prompt_frame_app
+
+    app, buffer = _build_prompt_frame_app("\u2500" * 40, width=40, output=DummyOutput())
+    root = app.layout.container
+
+    assert isinstance(root, HSplit)
+    assert len(root.children) == 3
+    assert isinstance(root.children[0], Window)
+    assert isinstance(root.children[1], Window)
+    assert isinstance(root.children[2], Window)
+    assert app.erase_when_done is True
+    buffer.text = "first\nsecond"
+    assert root.children[1].height().preferred == 2
 
 
 def test_interactive_status_shows_capability_summary(tmp_path, monkeypatch):

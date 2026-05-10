@@ -3,11 +3,19 @@ from __future__ import annotations
 import dataclasses
 import json
 from collections.abc import Callable, Iterable
+from math import ceil
 from pathlib import Path
 
 import typer
-from prompt_toolkit.shortcuts import PromptSession
+from prompt_toolkit.application import Application
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.layout import BufferControl, HSplit, Layout, Window
+from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.layout.dimension import Dimension
+from prompt_toolkit.layout.processors import BeforeInput
 from prompt_toolkit.styles import Style
+from prompt_toolkit.utils import get_cwidth
 from rich.markup import escape
 from rich.panel import Panel
 from rich.rule import Rule
@@ -31,7 +39,6 @@ STREAM_PANEL_VALUE_LIMIT = 200
 PROMPT_RULE_STYLE = "light_pink1"
 PROMPT_TOOLKIT_COLOR = "#ffafaf"
 
-_pt_session: PromptSession | None = None
 _pt_style: Style | None = None
 
 
@@ -45,13 +52,6 @@ def _get_pt_style() -> Style:
             }
         )
     return _pt_style
-
-
-def _get_pt_session() -> PromptSession:
-    global _pt_session
-    if _pt_session is None:
-        _pt_session = PromptSession()
-    return _pt_session
 
 
 def _run_interactive_chat(
@@ -233,35 +233,92 @@ def _run_interactive_loop(
 
 def _read_interactive_prompt() -> str:
     if console.is_terminal:
-        console.print(Rule(style=PROMPT_RULE_STYLE))
-        prompt_needs_echo = False
+        rule = "\u2500" * console.width
         try:
-            prompt = _get_pt_session().prompt(
-                [("class:prompt", "> ")],
-                style=_get_pt_style(),
-                bottom_toolbar=[("class:rule", "\u2500" * console.width)],
-                multiline=False,
-            )
+            prompt = _run_prompt_toolkit_frame(rule)
         except KeyboardInterrupt:
             console.print()
             return ""
+        except EOFError:
+            raise
         except Exception:
             # prompt_toolkit needs a real Windows console (not pty/bash/xterm).
             # Fall back to original 3-line frame + input().
-            global _pt_session
-            _pt_session = None
+            console.print(Rule(style=PROMPT_RULE_STYLE))
             console.print(f"[bold {PROMPT_RULE_STYLE}]>[/] ")
             console.print(Rule(style=PROMPT_RULE_STYLE))
             console.file.write("\033[2A\033[2C")
             console.file.flush()
             prompt = input()
             _clear_prompt_frame()
-            prompt_needs_echo = True
         stripped = prompt.strip()
-        if stripped and prompt_needs_echo:
-            console.print(f"[bold {PROMPT_RULE_STYLE}]>[/] {escape(stripped)}")
+        if stripped:
+            console.print(f"[bold {PROMPT_TOOLKIT_COLOR}]>[/] {escape(stripped)}")
         return stripped
     return input("> ").strip()
+
+
+def _run_prompt_toolkit_frame(rule: str) -> str:
+    app, _buffer = _build_prompt_frame_app(rule, width=console.width)
+    return app.run()
+
+
+def _build_prompt_frame_app(
+    rule: str,
+    *,
+    width: int,
+    output=None,
+) -> tuple[Application[str], Buffer]:
+    buffer = Buffer(multiline=True)
+    key_bindings = KeyBindings()
+
+    @key_bindings.add("enter")
+    def _accept(event) -> None:
+        event.app.exit(result=buffer.text)
+
+    @key_bindings.add("c-c")
+    def _interrupt(event) -> None:
+        event.app.exit(exception=KeyboardInterrupt)
+
+    @key_bindings.add("c-d")
+    def _eof(event) -> None:
+        event.app.exit(exception=EOFError)
+
+    buffer_control = BufferControl(
+        buffer=buffer,
+        input_processors=[BeforeInput([("class:prompt", "> ")])],
+    )
+    buffer_window = Window(
+        buffer_control,
+        height=lambda: _prompt_buffer_height(buffer, width),
+        wrap_lines=True,
+    )
+    root = HSplit(
+        [
+            Window(FormattedTextControl([("class:rule", rule)]), height=1),
+            buffer_window,
+            Window(FormattedTextControl([("class:rule", rule)]), height=1),
+        ]
+    )
+    app: Application[str] = Application(
+        layout=Layout(root, focused_element=buffer_control),
+        key_bindings=key_bindings,
+        style=_get_pt_style(),
+        erase_when_done=True,
+        full_screen=False,
+        output=output,
+    )
+    return app, buffer
+
+
+def _prompt_buffer_height(buffer: Buffer, width: int) -> Dimension:
+    usable_width = max(1, width)
+    rows = 0
+    for index, line in enumerate(buffer.document.lines):
+        prompt_width = 2 if index == 0 else 0
+        line_width = prompt_width + get_cwidth(line)
+        rows += max(1, ceil(line_width / usable_width))
+    return Dimension.exact(max(1, rows))
 
 
 def _clear_prompt_frame() -> None:
