@@ -146,6 +146,7 @@ class LangChainAgentRuntime:
                 max_tool_calls=cfg.max_tool_calls,
                 interrupt_on=interrupt_on,
                 summarization_model=chat_model,
+                workspace_path=str(workspace_path),
             ),
             checkpointer=checkpointer,
         )

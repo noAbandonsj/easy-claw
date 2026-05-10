@@ -26,8 +26,8 @@ def test_load_config_uses_local_data_dir(tmp_path, monkeypatch):
     assert config.mcp_enabled is False
     assert config.mcp_mode == "auto"
     assert config.mcp_config_path == "mcp_servers.json"
-    assert config.max_model_calls == 40
-    assert config.max_tool_calls == 100
+    assert config.max_model_calls == 80
+    assert config.max_tool_calls == 200
 
 
 def test_load_config_reads_env_overrides(tmp_path, monkeypatch):

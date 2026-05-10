@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from langchain.agents.middleware import (
+    FilesystemFileSearchMiddleware,
     HumanInTheLoopMiddleware,
     ModelCallLimitMiddleware,
     SummarizationMiddleware,
@@ -17,8 +18,11 @@ def build_agent_middleware(
     max_tool_calls: int | None = DEFAULT_MAX_TOOL_CALLS,
     interrupt_on: dict[str, object] | None = None,
     summarization_model: object | None = None,
+    workspace_path: str = "",
 ) -> tuple[object, ...]:
     middleware: list[object] = []
+    if workspace_path:
+        middleware.append(FilesystemFileSearchMiddleware(root_path=workspace_path))
     if max_model_calls is not None:
         middleware.append(ModelCallLimitMiddleware(run_limit=max_model_calls))
     if max_tool_calls is not None:
@@ -30,7 +34,7 @@ def build_agent_middleware(
         middleware.append(
             SummarizationMiddleware(
                 model=summarization_model,
-                trigger=("tokens", 640000),
+                trigger=("tokens", 1280000),
                 keep=("messages", 10),
             )
         )
