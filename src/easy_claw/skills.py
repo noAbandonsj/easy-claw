@@ -74,29 +74,6 @@ def discover_source_skills(source: SkillSource) -> list[Skill]:
     return [load_skill(path) for path in skill_paths]
 
 
-def discover_skill_sources(skills_root: Path, workspace_root: Path) -> list[str]:
-    """返回可按虚拟路径引用的技能源目录路径。"""
-    workspace = workspace_root.resolve()
-    source_dirs: set[Path] = set()
-    for skill in discover_skills(skills_root):
-        if skill.path.name.lower() == "skill.md":
-            source_dirs.add(skill.path.parent.parent.resolve())
-        else:
-            source_dirs.add(skill.path.parent.resolve())
-
-    sources: list[str] = []
-    for source_dir in sorted(source_dirs):
-        try:
-            relative = source_dir.relative_to(workspace)
-        except ValueError:
-            continue
-        source = "/" + relative.as_posix().strip("/")
-        if not source.endswith("/"):
-            source += "/"
-        sources.append(source)
-    return sources
-
-
 def resolve_skill_sources(
     *,
     app_root: Path,

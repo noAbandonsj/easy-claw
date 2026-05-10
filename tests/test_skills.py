@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from easy_claw.skills import discover_skill_sources, discover_skills, resolve_skill_sources
+from easy_claw.skills import discover_skills, resolve_skill_sources
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -65,19 +65,6 @@ def test_discover_skills_reads_flat_markdown_skill(tmp_path):
     skills = discover_skills(tmp_path / "skills")
 
     assert skills[0].name == "summarize-docs"
-
-
-def test_discover_skill_sources_returns_deepagents_source_dirs(tmp_path):
-    skill_dir = tmp_path / "skills" / "core" / "analyze-project"
-    skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text(
-        "---\nname: analyze-project\ndescription: Analyze.\n---\n# Skill",
-        encoding="utf-8",
-    )
-
-    sources = discover_skill_sources(tmp_path / "skills", tmp_path)
-
-    assert sources == ["/skills/core/"]
 
 
 def test_resolve_skill_sources_collects_common_paths_in_priority_order(tmp_path):

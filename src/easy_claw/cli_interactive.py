@@ -29,6 +29,7 @@ from easy_claw.storage.repositories import AuditRepository, SessionRepository
 
 STREAM_PANEL_VALUE_LIMIT = 200
 PROMPT_RULE_STYLE = "light_pink1"
+PROMPT_TOOLKIT_COLOR = "#ffafaf"
 
 _pt_session: PromptSession | None = None
 _pt_style: Style | None = None
@@ -37,7 +38,12 @@ _pt_style: Style | None = None
 def _get_pt_style() -> Style:
     global _pt_style
     if _pt_style is None:
-        _pt_style = Style.from_dict({"prompt": "ansimagenta bold"})
+        _pt_style = Style.from_dict(
+            {
+                "prompt": f"{PROMPT_TOOLKIT_COLOR} bold",
+                "rule": PROMPT_TOOLKIT_COLOR,
+            }
+        )
     return _pt_style
 
 
@@ -228,10 +234,12 @@ def _run_interactive_loop(
 def _read_interactive_prompt() -> str:
     if console.is_terminal:
         console.print(Rule(style=PROMPT_RULE_STYLE))
+        prompt_needs_echo = False
         try:
             prompt = _get_pt_session().prompt(
                 [("class:prompt", "> ")],
                 style=_get_pt_style(),
+                bottom_toolbar=[("class:rule", "\u2500" * console.width)],
                 multiline=False,
             )
         except KeyboardInterrupt:
@@ -248,8 +256,9 @@ def _read_interactive_prompt() -> str:
             console.file.flush()
             prompt = input()
             _clear_prompt_frame()
+            prompt_needs_echo = True
         stripped = prompt.strip()
-        if stripped:
+        if stripped and prompt_needs_echo:
             console.print(f"[bold {PROMPT_RULE_STYLE}]>[/] {escape(stripped)}")
         return stripped
     return input("> ").strip()

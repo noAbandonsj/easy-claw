@@ -361,6 +361,37 @@ def test_terminal_prompt_renders_light_pink_rules_before_input_and_clears_them(m
     assert rendered.count("\x1b[2K") == 3
 
 
+def test_terminal_prompt_toolkit_path_does_not_echo_input_twice(monkeypatch):
+    output = StringIO()
+    test_console = Console(file=output, force_terminal=True, color_system="256", width=40)
+    monkeypatch.setattr("easy_claw.cli_interactive.console", test_console)
+    output_before_prompt = []
+    prompt_kwargs = []
+
+    class FakePromptSession:
+        def prompt(self, *_args, **kwargs):
+            output_before_prompt.append(output.getvalue())
+            prompt_kwargs.append(kwargs)
+            output.write("> hello\n")
+            return "hello"
+
+    monkeypatch.setattr("easy_claw.cli_interactive._get_pt_session", lambda: FakePromptSession())
+
+    from easy_claw.cli_interactive import _read_interactive_prompt
+
+    assert _read_interactive_prompt() == "hello"
+    rendered_before_prompt = output_before_prompt[0]
+    assert rendered_before_prompt.count("\u2500" * 40) == 1
+    assert prompt_kwargs[0]["bottom_toolbar"] == [("class:rule", "\u2500" * 40)]
+    assert "38;5;217" in rendered_before_prompt
+    assert "38;5;206" not in rendered_before_prompt
+    assert prompt_kwargs[0]["style"].style_rules == [
+        ("prompt", "#ffafaf bold"),
+        ("rule", "#ffafaf"),
+    ]
+    assert output.getvalue().count("hello") == 1
+
+
 def test_interactive_status_shows_capability_summary(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")

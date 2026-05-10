@@ -211,10 +211,6 @@ class LangChainAgentSession:
         )
 
 
-DeepAgentsRuntime = LangChainAgentRuntime
-DeepAgentSession = LangChainAgentSession
-
-
 def _build_chat_model(model: str, base_url: str, api_key: str) -> object:
     from langchain_openai import ChatOpenAI
 

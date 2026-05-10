@@ -7,7 +7,6 @@ from langchain_core.tools import tool
 
 from easy_claw.agent.types import ToolBundle
 
-FILE_READ_ONLY_TOOLS = {"read_file", "list_directory", "file_search"}
 FILE_MUTABLE_TOOLS = {"write_file", "file_delete", "copy_file", "move_file", "edit_file"}
 
 

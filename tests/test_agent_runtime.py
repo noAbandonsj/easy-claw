@@ -47,18 +47,6 @@ def _test_config(*, tmp_path: Path, **kwargs: object) -> AppConfig:
     return AppConfig(**defaults)
 
 
-def test_langchain_runtime_is_available_as_agent_runtime_alias():
-    from easy_claw.agent.protocols import AgentRuntime
-    from easy_claw.agent.runtime import DeepAgentsRuntime, LangChainAgentRuntime
-
-    runtime = LangChainAgentRuntime()
-
-    assert isinstance(runtime, LangChainAgentRuntime)
-    assert DeepAgentsRuntime is LangChainAgentRuntime
-    assert hasattr(AgentRuntime, "run")
-    assert hasattr(AgentRuntime, "open_session")
-
-
 def test_deepagents_runtime_requires_model_configuration(tmp_path):
     runtime = LangChainAgentRuntime()
     config = _test_config(tmp_path=tmp_path, model=None)
