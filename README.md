@@ -321,16 +321,34 @@ easy-claw/
     setup-mcp.ps1
   src/
     easy_claw/
-      cli.py
       config.py
+      skills.py
+      workspace.py
       api/
+        app.py
+        schemas.py
+        websocket.py
       agent/
+        approvals.py
+        langchain_runtime.py
+        prompts.py
+        streaming.py
+      cli/
+        interactive.py
+        slash.py
+        views.py
       storage/
       tools/
   skills/
     core/
     user/
   tests/
+    agent/
+    api/
+    cli/
+    core/
+    storage/
+    tools/
 ```
 
 本地运行生成的数据默认放在 `data/`，该目录不会提交到仓库。

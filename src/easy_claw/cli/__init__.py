@@ -9,9 +9,9 @@ import uvicorn
 from rich.table import Table
 
 from easy_claw import __version__ as _easy_claw_version
-from easy_claw.agent.runtime import AgentRequest, LangChainAgentRuntime
-from easy_claw.cli_interactive import _run_interactive_chat
-from easy_claw.cli_views import (
+from easy_claw.agent.langchain_runtime import AgentRequest, LangChainAgentRuntime
+from easy_claw.cli.interactive import _run_interactive_chat
+from easy_claw.cli.views import (
     _delete_checkpoint_thread,
     _find_session_by_prefix,
     _print_doctor,
@@ -181,7 +181,7 @@ def serve(
     port: int = typer.Option(8787, "--port"),
 ) -> None:
     """启动本地 API 服务（开发者向）。"""
-    uvicorn.run("easy_claw.api.main:app", host=host, port=port)
+    uvicorn.run("easy_claw.api.app:app", host=host, port=port)
 
 
 @app.command(rich_help_panel="主命令")

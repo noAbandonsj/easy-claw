@@ -6,7 +6,7 @@ from pathlib import Path
 
 from rich.table import Table
 
-from easy_claw.cli_views import (
+from easy_claw.cli.views import (
     _delete_checkpoint_thread,
     _find_session_by_prefix,
     _print_browser_details,

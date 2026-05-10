@@ -1,6 +1,14 @@
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+
+def _project_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    raise RuntimeError("Could not locate project root")
+
+
+ROOT = _project_root()
 
 
 def test_mcp_setup_uses_generic_script_and_start_flag():

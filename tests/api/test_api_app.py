@@ -3,9 +3,10 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from easy_claw.agent.runtime import StreamEvent
-from easy_claw.api.main import _next_stream_event_or_none, create_app
-from easy_claw.cli_slash import get_slash_command_specs
+from easy_claw.agent.streaming import StreamEvent
+from easy_claw.api.app import create_app
+from easy_claw.api.websocket import next_stream_event_or_none as _next_stream_event_or_none
+from easy_claw.cli.slash import get_slash_command_specs
 from easy_claw.config import AppConfig
 from easy_claw.skills import SkillSource
 from easy_claw.storage.repositories import SessionRecord
@@ -55,8 +56,8 @@ def test_get_session_endpoint_uses_repository_lookup(monkeypatch):
         def list_sessions(self):
             raise AssertionError("GET /sessions/{id} should not scan list_sessions()")
 
-    monkeypatch.setattr("easy_claw.api.main.initialize_product_db", lambda db_path: None)
-    monkeypatch.setattr("easy_claw.api.main.SessionRepository", FakeSessionRepository)
+    monkeypatch.setattr("easy_claw.api.app.initialize_product_db", lambda db_path: None)
+    monkeypatch.setattr("easy_claw.api.app.SessionRepository", FakeSessionRepository)
     client = TestClient(create_app())
 
     response = client.get("/sessions/session-1")
@@ -111,11 +112,11 @@ def test_web_capability_endpoints_return_structured_data(tmp_path, monkeypatch):
         def get_session(self, session_id):
             return record if session_id == record.id else None
 
-    monkeypatch.setattr("easy_claw.api.main.initialize_product_db", lambda db_path: None)
-    monkeypatch.setattr("easy_claw.api.main.SessionRepository", FakeSessionRepository)
-    monkeypatch.setattr("easy_claw.api.main.resolve_skill_sources", lambda **kwargs: [source])
+    monkeypatch.setattr("easy_claw.api.app.initialize_product_db", lambda db_path: None)
+    monkeypatch.setattr("easy_claw.api.app.SessionRepository", FakeSessionRepository)
+    monkeypatch.setattr("easy_claw.api.app.resolve_skill_sources", lambda **kwargs: [source])
     monkeypatch.setattr(
-        "easy_claw.api.main._check_playwright_browsers",
+        "easy_claw.api.app._check_playwright_browsers",
         lambda *, headless: not headless,
     )
     client = TestClient(create_app(_test_config(tmp_path)))
@@ -164,8 +165,8 @@ def test_websocket_chat_passes_resolved_skill_source_records(tmp_path, monkeypat
         assert workspace_root == tmp_path
         return [source]
 
-    monkeypatch.setattr("easy_claw.api.main.LangChainAgentRuntime", FakeRuntime)
-    monkeypatch.setattr("easy_claw.api.main.resolve_skill_sources", fake_resolve_skill_sources)
+    monkeypatch.setattr("easy_claw.api.app.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.api.app.resolve_skill_sources", fake_resolve_skill_sources)
     client = TestClient(create_app(_test_config(tmp_path)))
 
     with client.websocket_connect("/ws/chat") as websocket:
@@ -215,10 +216,10 @@ def test_websocket_chat_can_resume_existing_session_by_prefix(tmp_path, monkeypa
             captured_requests.append(request)
             return FakeSession()
 
-    monkeypatch.setattr("easy_claw.api.main.initialize_product_db", lambda db_path: None)
-    monkeypatch.setattr("easy_claw.api.main.SessionRepository", FakeSessionRepository)
-    monkeypatch.setattr("easy_claw.api.main.LangChainAgentRuntime", FakeRuntime)
-    monkeypatch.setattr("easy_claw.api.main.resolve_skill_sources", lambda **kwargs: [])
+    monkeypatch.setattr("easy_claw.api.app.initialize_product_db", lambda db_path: None)
+    monkeypatch.setattr("easy_claw.api.app.SessionRepository", FakeSessionRepository)
+    monkeypatch.setattr("easy_claw.api.app.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.api.app.resolve_skill_sources", lambda **kwargs: [])
     client = TestClient(create_app(_test_config(tmp_path)))
 
     with client.websocket_connect("/ws/chat?session_id=resume") as websocket:

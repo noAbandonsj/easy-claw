@@ -2,7 +2,15 @@ from pathlib import Path
 
 from easy_claw.skills import discover_skills, resolve_skill_sources
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+def _project_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    raise RuntimeError("Could not locate project root")
+
+
+PROJECT_ROOT = _project_root()
 
 
 def _write_skill(source_root, name, description="Test skill."):

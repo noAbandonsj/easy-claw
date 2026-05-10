@@ -2,21 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Iterator
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 
-from easy_claw.agent.runtime import (
-    AgentRequest,
-    LangChainAgentRuntime,
-    StaticApprovalReviewer,
-    StreamEvent,
-)
-from easy_claw.cli_slash import get_slash_command_specs
+from easy_claw.agent.approvals import StaticApprovalReviewer
+from easy_claw.agent.langchain_runtime import AgentRequest, LangChainAgentRuntime
+from easy_claw.api.schemas import CreateSessionRequest
+from easy_claw.api.websocket import event_to_dict as _event_to_dict
+from easy_claw.api.websocket import next_stream_event_or_none as _next_stream_event_or_none
+from easy_claw.cli.slash import get_slash_command_specs
 from easy_claw.config import AppConfig, load_config
 from easy_claw.skills import resolve_skill_sources
 from easy_claw.storage.db import initialize_product_db
@@ -24,12 +21,6 @@ from easy_claw.storage.repositories import SessionRepository
 from easy_claw.tools.browser import _check_playwright_browsers
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
-
-
-class CreateSessionRequest(BaseModel):
-    workspace_path: str | None = None
-    model: str | None = None
-    title: str = "新会话"
 
 
 def _session_to_dict(session: object) -> dict[str, str | None]:
@@ -67,28 +58,6 @@ def _mcp_status(config: AppConfig, server_count: int) -> str:
     if config.mcp_mode == "enabled" or config.mcp_enabled:
         return f"已启用（{server_count} 个服务）" if server_count else "已启用"
     return "已关闭"
-
-
-def _event_to_dict(event: StreamEvent) -> dict[str, object]:
-    msg: dict[str, object] = {"type": event.type}
-    if event.content:
-        msg["content"] = event.content
-    if event.tool_name:
-        msg["tool_name"] = event.tool_name
-    if event.tool_args is not None:
-        msg["tool_args"] = event.tool_args
-    if event.tool_result is not None:
-        msg["tool_result"] = event.tool_result
-    if event.usage:
-        msg["usage"] = event.usage
-    return msg
-
-
-def _next_stream_event_or_none(stream_iter: Iterator[StreamEvent]) -> StreamEvent | None:
-    try:
-        return next(stream_iter)
-    except StopIteration:
-        return None
 
 
 def create_app(config: AppConfig | None = None) -> FastAPI:

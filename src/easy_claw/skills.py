@@ -94,7 +94,11 @@ def resolve_skill_sources(
     candidates = [
         ("builtin", "easy-claw built-in", app / "skills"),
         ("user", "user skills (legacy deepagents)", home / ".deepagents" / "skills"),
-        ("user", "user agent skills (legacy deepagents)", home / ".deepagents" / "agent" / "skills"),
+        (
+            "user",
+            "user agent skills (legacy deepagents)",
+            home / ".deepagents" / "agent" / "skills",
+        ),
         ("user", "user agents", home / ".agents" / "skills"),
         ("user", "user easy-claw", home / ".easy-claw" / "skills"),
         ("user", "user claude", home / ".claude" / "skills"),

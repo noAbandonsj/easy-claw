@@ -416,18 +416,26 @@ easy-claw/
     doctor.ps1
   src/
     easy_claw/
-      cli.py
       config.py
       defaults.py
       skills.py
       workspace.py
       api/
-        main.py
+        app.py
+        schemas.py
+        websocket.py
       agent/
-        runtime.py
+        approvals.py
+        langchain_runtime.py
+        middleware.py
+        prompts.py
+        streaming.py
         toolset.py
         types.py
-        middleware.py
+      cli/
+        interactive.py
+        slash.py
+        views.py
       storage/
         db.py
         repositories.py
@@ -443,6 +451,12 @@ easy-claw/
     core/
     user/
   tests/
+    agent/
+    api/
+    cli/
+    core/
+    storage/
+    tools/
   data/
 ```
 

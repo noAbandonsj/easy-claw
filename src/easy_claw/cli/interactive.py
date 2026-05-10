@@ -21,14 +21,15 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.rule import Rule
 
-from easy_claw.agent.runtime import AgentRequest, AgentResult, LangChainAgentRuntime, StreamEvent
-from easy_claw.cli_slash import (
+from easy_claw.agent.langchain_runtime import AgentRequest, AgentResult, LangChainAgentRuntime
+from easy_claw.agent.streaming import StreamEvent
+from easy_claw.cli.slash import (
     LoopControl,
     SlashCommandContext,
     _dispatch_interactive_command,
     get_slash_command_specs,
 )
-from easy_claw.cli_views import (
+from easy_claw.cli.views import (
     _render_startup_banner,
     _resolve_skill_source_records,
     console,

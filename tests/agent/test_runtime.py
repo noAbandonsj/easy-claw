@@ -14,15 +14,17 @@ from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
-from easy_claw.agent.runtime import (
+from easy_claw.agent.approvals import StaticApprovalReviewer
+from easy_claw.agent.langchain_runtime import (
     AgentRequest,
     AgentResult,
     LangChainAgentRuntime,
     LangChainAgentSession,
-    StaticApprovalReviewer,
-    StreamEvent,
     _build_chat_model,
     _build_interrupt_on,
+)
+from easy_claw.agent.streaming import (
+    StreamEvent,
     _events_from_message,
     _invoke_with_approval,
 )
@@ -174,7 +176,7 @@ def test_langchain_runtime_uses_create_agent_and_core_tools(tmp_path, monkeypatc
 
     chat_model = FakeMessagesListChatModel(responses=[])
     monkeypatch.setattr(
-        "easy_claw.agent.runtime._build_chat_model",
+        "easy_claw.agent.langchain_runtime._build_chat_model",
         lambda model, base_url, api_key: chat_model,
     )
     monkeypatch.setattr("langchain.agents.create_agent", fake_create_agent)
@@ -242,7 +244,7 @@ def test_langchain_runtime_does_not_route_external_skill_sources_through_backend
 
     chat_model = FakeMessagesListChatModel(responses=[])
     monkeypatch.setattr(
-        "easy_claw.agent.runtime._build_chat_model",
+        "easy_claw.agent.langchain_runtime._build_chat_model",
         lambda model, base_url, api_key: chat_model,
     )
     monkeypatch.setattr("langchain.agents.create_agent", fake_create_agent)
@@ -302,12 +304,12 @@ def test_deepagents_runtime_uses_tool_bundle_and_closes_cleanup(tmp_path, monkey
 
     chat_model = FakeMessagesListChatModel(responses=[])
     monkeypatch.setattr(
-        "easy_claw.agent.runtime._build_chat_model",
+        "easy_claw.agent.langchain_runtime._build_chat_model",
         lambda model, base_url, api_key: chat_model,
     )
     monkeypatch.setattr("langchain.agents.create_agent", fake_create_agent)
     monkeypatch.setattr(
-        "easy_claw.agent.runtime.build_easy_claw_tools",
+        "easy_claw.agent.langchain_runtime.build_easy_claw_tools",
         fake_build_easy_claw_tools,
     )
 
@@ -360,7 +362,7 @@ def test_deepagents_session_reuses_agent_between_turns(tmp_path, monkeypatch):
 
     chat_model = FakeMessagesListChatModel(responses=[])
     monkeypatch.setattr(
-        "easy_claw.agent.runtime._build_chat_model",
+        "easy_claw.agent.langchain_runtime._build_chat_model",
         lambda model, base_url, api_key: chat_model,
     )
     monkeypatch.setattr("langchain.agents.create_agent", fake_create_agent)

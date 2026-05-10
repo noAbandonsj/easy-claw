@@ -4,7 +4,8 @@ from io import StringIO
 from rich.console import Console
 from typer.testing import CliRunner
 
-from easy_claw.agent.runtime import AgentResult, StreamEvent
+from easy_claw.agent.langchain_runtime import AgentResult
+from easy_claw.agent.streaming import StreamEvent
 from easy_claw.cli import app
 from easy_claw.skills import SkillSource
 from easy_claw.storage.repositories import AuditRepository
@@ -38,11 +39,11 @@ def test_chat_dry_run_option_is_removed():
 
 
 def test_cli_internals_are_split_into_focused_modules():
-    from easy_claw import cli_interactive, cli_slash, cli_views
+    from easy_claw.cli import interactive, slash, views
 
-    assert hasattr(cli_interactive, "_run_interactive_chat")
-    assert hasattr(cli_slash, "_dispatch_interactive_command")
-    assert hasattr(cli_views, "_print_session_status")
+    assert hasattr(interactive, "_run_interactive_chat")
+    assert hasattr(slash, "_dispatch_interactive_command")
+    assert hasattr(views, "_print_session_status")
 
 
 def test_chat_passes_resolved_skill_source_records(tmp_path, monkeypatch):
@@ -139,7 +140,7 @@ def test_chat_interactive_reuses_one_session_thread(tmp_path, monkeypatch):
                 thread_id=request.thread_id,
             )
 
-    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(
@@ -160,9 +161,9 @@ def test_chat_interactive_reuses_one_session_thread(tmp_path, monkeypatch):
 def test_render_streaming_turn_prints_tokens_and_tool_panels(monkeypatch):
     output = StringIO()
     test_console = Console(file=output, force_terminal=False, color_system=None, width=100)
-    monkeypatch.setattr("easy_claw.cli_interactive.console", test_console)
+    monkeypatch.setattr("easy_claw.cli.interactive.console", test_console)
 
-    from easy_claw.cli_interactive import _render_streaming_turn
+    from easy_claw.cli.interactive import _render_streaming_turn
 
     _render_streaming_turn(
         iter(
@@ -197,9 +198,9 @@ def test_render_streaming_turn_prints_tokens_and_tool_panels(monkeypatch):
 def test_render_streaming_turn_prints_error_event(monkeypatch):
     output = StringIO()
     test_console = Console(file=output, force_terminal=False, color_system=None, width=100)
-    monkeypatch.setattr("easy_claw.cli_interactive.console", test_console)
+    monkeypatch.setattr("easy_claw.cli.interactive.console", test_console)
 
-    from easy_claw.cli_interactive import _render_streaming_turn
+    from easy_claw.cli.interactive import _render_streaming_turn
 
     response, usage = _render_streaming_turn(
         iter(
@@ -240,7 +241,7 @@ def test_chat_interactive_uses_stream_when_session_supports_it(tmp_path, monkeyp
         def open_session(self, request):
             return FakeStreamingSession()
 
-    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(
@@ -268,7 +269,7 @@ def test_root_command_starts_interactive_chat(tmp_path, monkeypatch):
             captured_requests.append(request)
             return AgentResult(content=f"answer: {request.prompt}", thread_id=request.thread_id)
 
-    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(app, [], input="hello\nexit\n")
@@ -285,7 +286,7 @@ def test_interactive_help_lists_common_slash_commands(tmp_path, monkeypatch):
     class FakeRuntime:
         pass
 
-    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "--interactive"], input="/help\nexit\n")
@@ -310,7 +311,7 @@ def test_interactive_slash_only_commands_do_not_open_agent_session(tmp_path, mon
         def open_session(self, request):
             raise AssertionError("slash-only commands should not open the agent session")
 
-    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "--interactive"], input="/help\nexit\n")
@@ -326,7 +327,7 @@ def test_interactive_prompt_avoids_raw_ansi_in_captured_output(tmp_path, monkeyp
     class FakeRuntime:
         pass
 
-    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "--interactive"], input="/help\nexit\n")
@@ -338,7 +339,7 @@ def test_interactive_prompt_avoids_raw_ansi_in_captured_output(tmp_path, monkeyp
 def test_terminal_prompt_fallback_keeps_original_three_line_frame(monkeypatch):
     output = StringIO()
     test_console = Console(file=output, force_terminal=True, color_system="256", width=16)
-    monkeypatch.setattr("easy_claw.cli_interactive.console", test_console)
+    monkeypatch.setattr("easy_claw.cli.interactive.console", test_console)
     output_before_input = []
 
     def broken_frame_runner(_rule):
@@ -348,10 +349,10 @@ def test_terminal_prompt_fallback_keeps_original_three_line_frame(monkeypatch):
         output_before_input.append(output.getvalue())
         return "hello"
 
-    monkeypatch.setattr("easy_claw.cli_interactive._run_prompt_toolkit_frame", broken_frame_runner)
+    monkeypatch.setattr("easy_claw.cli.interactive._run_prompt_toolkit_frame", broken_frame_runner)
     monkeypatch.setattr("builtins.input", fake_input)
 
-    from easy_claw.cli_interactive import _read_interactive_prompt
+    from easy_claw.cli.interactive import _read_interactive_prompt
 
     assert _read_interactive_prompt() == "hello"
     rendered_before_input = output_before_input[0]
@@ -368,15 +369,15 @@ def test_terminal_prompt_fallback_keeps_original_three_line_frame(monkeypatch):
 def test_terminal_prompt_toolkit_frame_is_erased_after_submit(monkeypatch):
     output = StringIO()
     test_console = Console(file=output, force_terminal=True, color_system="256", width=40)
-    monkeypatch.setattr("easy_claw.cli_interactive.console", test_console)
+    monkeypatch.setattr("easy_claw.cli.interactive.console", test_console)
     captured_rules = []
 
     def fake_frame_runner(rule):
         captured_rules.append(rule)
         return "hello"
 
-    monkeypatch.setattr("easy_claw.cli_interactive._run_prompt_toolkit_frame", fake_frame_runner)
-    from easy_claw.cli_interactive import _read_interactive_prompt
+    monkeypatch.setattr("easy_claw.cli.interactive._run_prompt_toolkit_frame", fake_frame_runner)
+    from easy_claw.cli.interactive import _read_interactive_prompt
 
     assert _read_interactive_prompt() == "hello"
     assert captured_rules == ["\u2500" * 40]
@@ -387,7 +388,7 @@ def test_prompt_toolkit_frame_places_bottom_rule_after_input_buffer():
     from prompt_toolkit.layout.containers import HSplit, Window
     from prompt_toolkit.output import DummyOutput
 
-    from easy_claw.cli_interactive import _build_prompt_frame_app
+    from easy_claw.cli.interactive import _build_prompt_frame_app
 
     app, buffer = _build_prompt_frame_app("\u2500" * 40, width=40, output=DummyOutput())
     root = app.layout.container
@@ -403,7 +404,7 @@ def test_prompt_toolkit_frame_places_bottom_rule_after_input_buffer():
 
 
 def test_tab_completion_starts_completion_when_no_menu_is_active():
-    from easy_claw.cli_interactive import _advance_or_start_completion
+    from easy_claw.cli.interactive import _advance_or_start_completion
 
     class FakeBuffer:
         complete_state = None
@@ -425,7 +426,7 @@ def test_tab_completion_starts_completion_when_no_menu_is_active():
 
 
 def test_tab_completion_advances_when_menu_is_active():
-    from easy_claw.cli_interactive import _advance_or_start_completion
+    from easy_claw.cli.interactive import _advance_or_start_completion
 
     class FakeBuffer:
         complete_state = object()
@@ -467,8 +468,8 @@ def test_interactive_status_shows_capability_summary(tmp_path, monkeypatch):
     def fake_resolve_skill_sources(*, app_root, workspace_root, home_dir=None):
         return [source]
 
-    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
-    monkeypatch.setattr("easy_claw.cli_views.resolve_skill_sources", fake_resolve_skill_sources)
+    monkeypatch.setattr("easy_claw.cli.interactive.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.views.resolve_skill_sources", fake_resolve_skill_sources)
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "--interactive"], input="/status\nexit\n")
@@ -496,7 +497,7 @@ def test_interactive_status_shows_accumulated_token_usage(tmp_path, monkeypatch)
                 usage={"input": 1234, "output": 56, "total": 1290},
             )
 
-    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "--interactive"], input="hello\n/status\nexit\n")
@@ -537,7 +538,7 @@ def test_interactive_status_shows_streamed_token_usage(tmp_path, monkeypatch):
         def open_session(self, request):
             return FakeStreamingSession()
 
-    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "--interactive"], input="hello\n/status\nexit\n")
@@ -568,8 +569,8 @@ def test_interactive_skills_slash_command_prints_resolved_sources(tmp_path, monk
     def fake_resolve_skill_sources(*, app_root, workspace_root, home_dir=None):
         return [source]
 
-    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
-    monkeypatch.setattr("easy_claw.cli_views.resolve_skill_sources", fake_resolve_skill_sources)
+    monkeypatch.setattr("easy_claw.cli.interactive.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.views.resolve_skill_sources", fake_resolve_skill_sources)
     runner = CliRunner()
 
     result = runner.invoke(app, ["chat", "--interactive"], input="/skills\nexit\n")
@@ -592,7 +593,7 @@ def test_interactive_model_slash_command_switches_next_turn_model(tmp_path, monk
                 thread_id=request.thread_id,
             )
 
-    monkeypatch.setattr("easy_claw.cli_interactive.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.cli.interactive.LangChainAgentRuntime", FakeRuntime)
     runner = CliRunner()
 
     result = runner.invoke(
@@ -742,7 +743,7 @@ def test_dev_skills_list_all_sources_prints_resolved_sources(tmp_path, monkeypat
 
 
 def test_startup_banner_shows_mcp_status(tmp_path, monkeypatch):
-    from easy_claw.cli_views import _count_mcp_servers, _mcp_status
+    from easy_claw.cli.views import _count_mcp_servers, _mcp_status
     from easy_claw.config import AppConfig
 
     assert _count_mcp_servers("nonexistent.json") == 0
