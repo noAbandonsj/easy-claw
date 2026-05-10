@@ -7,6 +7,7 @@ from pathlib import Path
 
 import typer
 from prompt_toolkit.shortcuts import PromptSession
+from prompt_toolkit.styles import Style
 from rich.markup import escape
 from rich.panel import Panel
 from rich.rule import Rule
@@ -30,6 +31,14 @@ STREAM_PANEL_VALUE_LIMIT = 200
 PROMPT_RULE_STYLE = "light_pink1"
 
 _pt_session: PromptSession | None = None
+_pt_style: Style | None = None
+
+
+def _get_pt_style() -> Style:
+    global _pt_style
+    if _pt_style is None:
+        _pt_style = Style.from_dict({"prompt": "ansimagenta bold"})
+    return _pt_style
 
 
 def _get_pt_session() -> PromptSession:
@@ -219,23 +228,26 @@ def _run_interactive_loop(
 def _read_interactive_prompt() -> str:
     if console.is_terminal:
         console.print(Rule(style=PROMPT_RULE_STYLE))
-        console.print(f"[bold {PROMPT_RULE_STYLE}]>[/] ")
-        console.print(Rule(style=PROMPT_RULE_STYLE))
-        console.file.write("\033[2A\033[2C")
-        console.file.flush()
         try:
-            prompt = _get_pt_session().prompt("", multiline=False)
+            prompt = _get_pt_session().prompt(
+                [("class:prompt", "> ")],
+                style=_get_pt_style(),
+                multiline=False,
+            )
         except KeyboardInterrupt:
-            _clear_prompt_frame()
             console.print()
             return ""
         except Exception:
             # prompt_toolkit needs a real Windows console (not pty/bash/xterm).
-            # Fall back to plain input() for non-console environments.
+            # Fall back to original 3-line frame + input().
             global _pt_session
             _pt_session = None
+            console.print(f"[bold {PROMPT_RULE_STYLE}]>[/] ")
+            console.print(Rule(style=PROMPT_RULE_STYLE))
+            console.file.write("\033[2A\033[2C")
+            console.file.flush()
             prompt = input()
-        _clear_prompt_frame()
+            _clear_prompt_frame()
         stripped = prompt.strip()
         if stripped:
             console.print(f"[bold {PROMPT_RULE_STYLE}]>[/] {escape(stripped)}")
