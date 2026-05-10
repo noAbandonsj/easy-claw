@@ -20,6 +20,7 @@ dependencies = [
     "rich>=13.9.0",
     "typer>=0.16.0",
     "uvicorn>=0.34.0",
+    "prompt-toolkit>=3.0",
 ]
 
 [dependency-groups]

@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 
 import typer
+from prompt_toolkit.shortcuts import PromptSession
 from rich.markup import escape
 from rich.panel import Panel
 from rich.rule import Rule
@@ -27,6 +28,15 @@ from easy_claw.storage.repositories import AuditRepository, SessionRepository
 
 STREAM_PANEL_VALUE_LIMIT = 200
 PROMPT_RULE_STYLE = "light_pink1"
+
+_pt_session: PromptSession | None = None
+
+
+def _get_pt_session() -> PromptSession:
+    global _pt_session
+    if _pt_session is None:
+        _pt_session = PromptSession()
+    return _pt_session
 
 
 def _run_interactive_chat(
@@ -213,7 +223,18 @@ def _read_interactive_prompt() -> str:
         console.print(Rule(style=PROMPT_RULE_STYLE))
         console.file.write("\033[2A\033[2C")
         console.file.flush()
-        prompt = input()
+        try:
+            prompt = _get_pt_session().prompt("", multiline=False)
+        except KeyboardInterrupt:
+            _clear_prompt_frame()
+            console.print()
+            return ""
+        except Exception:
+            # prompt_toolkit needs a real Windows console (not pty/bash/xterm).
+            # Fall back to plain input() for non-console environments.
+            global _pt_session
+            _pt_session = None
+            prompt = input()
         _clear_prompt_frame()
         stripped = prompt.strip()
         if stripped:
