@@ -74,6 +74,7 @@ def test_build_chat_model_creates_openai_compatible_model(monkeypatch):
 
     assert model.model_name == "deepseek-v4-pro"
     assert str(model.openai_api_base).rstrip("/") == "https://api.deepseek.com"
+    assert model.stream_usage is True
 
 
 def test_build_chat_model_works_with_custom_base_url(monkeypatch):

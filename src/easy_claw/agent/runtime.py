@@ -221,6 +221,7 @@ def _build_chat_model(model: str, base_url: str, api_key: str) -> object:
         model=model,
         api_key=api_key,
         base_url=base_url,
+        stream_usage=True,
     )
 
 
