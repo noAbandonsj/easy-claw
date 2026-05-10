@@ -208,10 +208,12 @@ def test_langchain_runtime_uses_create_agent_and_core_tools(tmp_path, monkeypatc
     assert "skills" not in captured
     assert "backend" not in captured
     assert "interrupt_on" not in captured
-    assert isinstance(captured["middleware"][0], ModelCallLimitMiddleware)
-    assert captured["middleware"][0].run_limit == 40
-    assert isinstance(captured["middleware"][1], ToolCallLimitMiddleware)
-    assert captured["middleware"][1].run_limit == 100
+    from langchain.agents.middleware import FilesystemFileSearchMiddleware
+    assert isinstance(captured["middleware"][0], FilesystemFileSearchMiddleware)
+    assert isinstance(captured["middleware"][1], ModelCallLimitMiddleware)
+    assert captured["middleware"][1].run_limit == 80
+    assert isinstance(captured["middleware"][2], ToolCallLimitMiddleware)
+    assert captured["middleware"][2].run_limit == 200
     tool_names = {t.name for t in captured["tools"]}
     assert tool_names == {
         "search_web",
