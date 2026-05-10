@@ -144,7 +144,7 @@ class TestBuildMcpToolsSuccess:
                     }
                 }
 
-            async def get_tools(self):
+            async def get_tools(self, server_name=None):
                 return []
 
         monkeypatch.setattr(
@@ -173,7 +173,7 @@ class TestBuildMcpToolsSuccess:
             def __init__(self, config):
                 self.config = config
 
-            async def get_tools(self):
+            async def get_tools(self, server_name=None):
                 return fake_tools
 
             async def close(self):
@@ -187,10 +187,13 @@ class TestBuildMcpToolsSuccess:
 
         bundle = build_mcp_tools(enabled=True, config_path=str(config_file))
 
-        assert bundle.tools == fake_tools
+        assert [t.name for t in bundle.tools] == [
+            "mcp__srv__mcp_srv_tool1",
+            "mcp__srv__mcp_srv_tool2",
+        ]
         assert bundle.interrupt_on == {
-            "mcp_srv_tool1": True,
-            "mcp_srv_tool2": True,
+            "mcp__srv__mcp_srv_tool1": True,
+            "mcp__srv__mcp_srv_tool2": True,
         }
         assert len(bundle.cleanup) == 1
 
@@ -209,7 +212,7 @@ class TestBuildMcpToolsSuccess:
             def __init__(self, config):
                 pass
 
-            async def get_tools(self):
+            async def get_tools(self, server_name=None):
                 return [FakeTool("t1")]
 
         monkeypatch.setattr(
@@ -230,7 +233,7 @@ class TestBuildMcpToolsSuccess:
             def __init__(self, config):
                 pass
 
-            async def get_tools(self):
+            async def get_tools(self, server_name=None):
                 raise ValueError("server failed")
 
         monkeypatch.setattr(
@@ -278,8 +281,8 @@ class TestBuildMcpToolsSuccess:
         with pytest.warns(RuntimeWarning, match="bad"):
             bundle = build_mcp_tools(enabled="auto", config_path=str(config_file))
 
-        assert bundle.tools == [good_tool]
-        assert bundle.interrupt_on == {"good_tool": True}
+        assert [t.name for t in bundle.tools] == ["mcp__good__good_tool"]
+        assert bundle.interrupt_on == {"mcp__good__good_tool": True}
 
     def test_wraps_async_only_mcp_tools_for_sync_agent_invocation(self, tmp_path, monkeypatch):
         config_file = tmp_path / "servers.json"
@@ -298,7 +301,7 @@ class TestBuildMcpToolsSuccess:
             def __init__(self, config):
                 pass
 
-            async def get_tools(self):
+            async def get_tools(self, server_name=None):
                 return [async_only_tool]
 
             async def close(self):
@@ -312,6 +315,7 @@ class TestBuildMcpToolsSuccess:
 
         bundle = build_mcp_tools(enabled=True, config_path=str(config_file))
 
+        assert bundle.tools[0].name == "mcp__amap__maps_weather"
         assert bundle.tools[0].invoke({"city": "上海"}) == "上海 ok"
 
     def test_mcp_tool_exception_returns_tool_result_instead_of_raising(
@@ -336,7 +340,7 @@ class TestBuildMcpToolsSuccess:
             def __init__(self, config):
                 pass
 
-            async def get_tools(self):
+            async def get_tools(self, server_name=None):
                 return [failing_tool]
 
             async def close(self):
@@ -374,7 +378,7 @@ class TestBuildMcpToolsSuccess:
             def __init__(self, config):
                 pass
 
-            async def get_tools(self):
+            async def get_tools(self, server_name=None):
                 return [failing_tool]
 
             async def close(self):
@@ -390,5 +394,5 @@ class TestBuildMcpToolsSuccess:
 
         result = bundle.tools[0].invoke({"city": "上海"})
 
-        assert "MCP 工具 'maps_weather' 调用失败" in result
+        assert "MCP 工具 'mcp__srv__maps_weather' 调用失败" in result
         assert "connection closed" in result

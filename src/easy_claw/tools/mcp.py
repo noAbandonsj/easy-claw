@@ -26,6 +26,9 @@ def build_mcp_tools(*, enabled: bool | str, config_path: str) -> ToolBundle:
 
     关闭时返回空 ToolBundle。启用时读取服务配置，连接 MCP 服务，
     并返回发现到的工具和清理回调。
+
+    每个 MCP 工具名称会加上 ``mcp__{server_name}__`` 前缀，
+    以便与内置工具（如文件系统的 list_directory）区分。
     """
     mode = _mcp_mode(enabled)
     if mode == "disabled":
@@ -52,7 +55,7 @@ def build_mcp_tools(*, enabled: bool | str, config_path: str) -> ToolBundle:
 
     loop = get_background_loop()
     try:
-        client, tools, errors = loop.run_coroutine(
+        client, server_tools, errors = loop.run_coroutine(
             _async_init_mcp(
                 servers_config,
                 tolerate_errors=mode == "auto",
@@ -71,10 +74,13 @@ def build_mcp_tools(*, enabled: bool | str, config_path: str) -> ToolBundle:
             stacklevel=2,
         )
 
-    if not tools:
+    if not server_tools:
         return ToolBundle()
 
-    tools = [_ensure_sync_invocation(tool, loop) for tool in tools]
+    tools = [
+        _ensure_sync_invocation(_prefix_tool_name(tool, server_name), loop)
+        for server_name, tool in server_tools
+    ]
     interrupt_on = {tool.name: True for tool in tools}
 
     return ToolBundle(
@@ -125,6 +131,12 @@ def _ensure_sync_invocation(tool: object, loop) -> object:
         func=sync_call,
         coroutine=async_call_with_error_boundary,
     )
+
+
+def _prefix_tool_name(tool: object, server_name: str) -> object:
+    """给工具名称加上 ``mcp__{server_name}__`` 前缀。"""
+    tool.name = f"mcp__{server_name}__{tool.name}"
+    return tool
 
 
 def _format_mcp_tool_error(tool_name: str, exc: Exception) -> str:
@@ -238,19 +250,19 @@ async def _async_init_mcp(
     servers_config: dict,
     *,
     tolerate_errors: bool = False,
-) -> tuple[object, list[object], dict[str, str]]:
+) -> tuple[object, list[tuple[str, object]], dict[str, str]]:
     client = MultiServerMCPClient(servers_config)
-    if not tolerate_errors:
-        tools = await client.get_tools()
-        return client, tools, {}
-
-    tools = []
-    errors = {}
+    tools: list[tuple[str, object]] = []
+    errors: dict[str, str] = {}
     for server_name in servers_config:
         try:
-            tools.extend(await client.get_tools(server_name=server_name))
+            for tool in await client.get_tools(server_name=server_name):
+                tools.append((server_name, tool))
         except Exception as exc:  # pragma: no cover - concrete errors depend on MCP servers
-            errors[server_name] = str(exc)
+            if tolerate_errors:
+                errors[server_name] = str(exc)
+            else:
+                raise
     return client, tools, errors
 
 
