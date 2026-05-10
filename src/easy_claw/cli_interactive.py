@@ -9,6 +9,7 @@ from pathlib import Path
 import typer
 from prompt_toolkit.application import Application
 from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import BufferControl, HSplit, Layout, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
@@ -25,6 +26,7 @@ from easy_claw.cli_slash import (
     LoopControl,
     SlashCommandContext,
     _dispatch_interactive_command,
+    get_slash_command_specs,
 )
 from easy_claw.cli_views import (
     _render_startup_banner,
@@ -263,13 +265,26 @@ def _run_prompt_toolkit_frame(rule: str) -> str:
     return app.run()
 
 
+def _build_slash_completer() -> WordCompleter:
+    specs = get_slash_command_specs()
+    words: list[str] = []
+    meta: dict[str, str] = {}
+    for spec in specs:
+        words.append(spec.name)
+        meta[spec.name] = spec.description
+        for alias in spec.aliases:
+            words.append(alias)
+            meta[alias] = f"{spec.name} — {spec.description}"
+    return WordCompleter(words, ignore_case=True, sentence=True, meta_dict=meta)
+
+
 def _build_prompt_frame_app(
     rule: str,
     *,
     width: int,
     output=None,
 ) -> tuple[Application[str], Buffer]:
-    buffer = Buffer(multiline=True)
+    buffer = Buffer(multiline=True, completer=_build_slash_completer())
     key_bindings = KeyBindings()
 
     @key_bindings.add("enter")
@@ -283,6 +298,10 @@ def _build_prompt_frame_app(
     @key_bindings.add("c-d")
     def _eof(event) -> None:
         event.app.exit(exception=EOFError)
+
+    @key_bindings.add("tab")
+    def _complete(event) -> None:
+        _advance_or_start_completion(event.current_buffer)
 
     buffer_control = BufferControl(
         buffer=buffer,
@@ -309,6 +328,13 @@ def _build_prompt_frame_app(
         output=output,
     )
     return app, buffer
+
+
+def _advance_or_start_completion(buffer: Buffer) -> None:
+    if buffer.complete_state:
+        buffer.complete_next()
+        return
+    buffer.start_completion(select_first=True)
 
 
 def _prompt_buffer_height(buffer: Buffer, width: int) -> Dimension:

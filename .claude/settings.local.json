@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(uv run *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "mcp__plugin_context7_context7__query-docs",
+      "Bash(uv sync *)",
+      "Bash(ls -d .worktrees)",
+      "Bash(echo \"EXIT:$?\")",
+      "mcp__plugin_context7_context7__resolve-library-id"
     ]
   }
 }

@@ -402,6 +402,50 @@ def test_prompt_toolkit_frame_places_bottom_rule_after_input_buffer():
     assert root.children[1].height().preferred == 2
 
 
+def test_tab_completion_starts_completion_when_no_menu_is_active():
+    from easy_claw.cli_interactive import _advance_or_start_completion
+
+    class FakeBuffer:
+        complete_state = None
+
+        def __init__(self):
+            self.calls = []
+
+        def start_completion(self, *, select_first=False):
+            self.calls.append(("start_completion", select_first))
+
+        def complete_next(self):
+            self.calls.append(("complete_next", None))
+
+    buffer = FakeBuffer()
+
+    _advance_or_start_completion(buffer)
+
+    assert buffer.calls == [("start_completion", True)]
+
+
+def test_tab_completion_advances_when_menu_is_active():
+    from easy_claw.cli_interactive import _advance_or_start_completion
+
+    class FakeBuffer:
+        complete_state = object()
+
+        def __init__(self):
+            self.calls = []
+
+        def start_completion(self, *, select_first=False):
+            self.calls.append(("start_completion", select_first))
+
+        def complete_next(self):
+            self.calls.append(("complete_next", None))
+
+    buffer = FakeBuffer()
+
+    _advance_or_start_completion(buffer)
+
+    assert buffer.calls == [("complete_next", None)]
+
+
 def test_interactive_status_shows_capability_summary(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")

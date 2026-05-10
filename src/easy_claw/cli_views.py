@@ -225,7 +225,7 @@ def _print_session_status(
     table.add_row("模型调用上限", _format_limit(config.max_model_calls))
     table.add_row("工具调用上限", _format_limit(config.max_tool_calls))
     table.add_row("轮次", str(len(conversation)))
-    if token_usage:
+    if token_usage is not None:
         table.add_row("输入 token", f"{token_usage.get('input', 0):,}")
         table.add_row("输出 token", f"{token_usage.get('output', 0):,}")
         table.add_row("总 token", f"{token_usage.get('total', 0):,}")

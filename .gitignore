@@ -26,3 +26,7 @@ Thumbs.db
 .idea/
 .vscode/
 .worktrees/
+
+# Other AI tools
+.codex/
+.workbuddy/
