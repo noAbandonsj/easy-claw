@@ -308,6 +308,7 @@ easy-claw/
   pyproject.toml
   uv.lock
   README.md
+  AGENTS.md
   .env.example
   mcp_servers.json.example
   docs/
@@ -365,6 +366,8 @@ uv run ruff format .
 ```
 
 详细架构见 [docs/architecture.md](docs/architecture.md)。
+
+给后续开发者 AI 和代码维护 Agent 的项目级说明见 [AGENTS.md](AGENTS.md)。它包含当前架构边界、配置语义、测试分区、常见改动位置和维护规则。
 
 ---
 
