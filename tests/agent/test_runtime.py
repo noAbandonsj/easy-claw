@@ -792,3 +792,56 @@ def test_stream_with_approval_cancel_during_stream_preserves_partial_content():
     types = [e.type for e in events_collected]
     assert "interrupted" in types
     assert events_collected[-1].type == "done"
+
+
+def test_session_stream_passes_cancel_event_to_underlying_function(monkeypatch):
+    captured_cancel = {}
+
+    def fake_stream_with_approval(agent, input_value, *, config, reviewer, thread_id,
+                                  cancel_event=None):
+        captured_cancel["event"] = cancel_event
+        yield StreamEvent(type="token", content="ok", thread_id=thread_id)
+        yield StreamEvent(type="done", content="ok", thread_id=thread_id)
+
+    monkeypatch.setattr(
+        "easy_claw.agent.langchain_runtime._stream_with_approval",
+        fake_stream_with_approval,
+    )
+
+    cancel_event = threading.Event()
+    session = LangChainAgentSession(
+        agent=FakeStreamingAgent(),
+        thread_id="thread-1",
+        reviewer=StaticApprovalReviewer(approve=True),
+        exit_stack=ExitStack(),
+    )
+
+    list(session.stream("hello", cancel_event=cancel_event))
+
+    assert captured_cancel["event"] is cancel_event
+
+
+def test_session_stream_works_without_cancel_event(monkeypatch):
+    captured_cancel = {}
+
+    def fake_stream_with_approval(agent, input_value, *, config, reviewer, thread_id,
+                                  cancel_event=None):
+        captured_cancel["event"] = cancel_event
+        yield StreamEvent(type="token", content="ok", thread_id=thread_id)
+        yield StreamEvent(type="done", content="ok", thread_id=thread_id)
+
+    monkeypatch.setattr(
+        "easy_claw.agent.langchain_runtime._stream_with_approval",
+        fake_stream_with_approval,
+    )
+
+    session = LangChainAgentSession(
+        agent=FakeStreamingAgent(),
+        thread_id="thread-1",
+        reviewer=StaticApprovalReviewer(approve=True),
+        exit_stack=ExitStack(),
+    )
+
+    list(session.stream("hello"))
+
+    assert captured_cancel["event"] is None

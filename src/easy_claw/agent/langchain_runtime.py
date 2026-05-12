@@ -178,13 +178,14 @@ class LangChainAgentSession:
             usage=usage,
         )
 
-    def stream(self, prompt: str) -> Iterable[StreamEvent]:
+    def stream(self, prompt: str, cancel_event: Any = None) -> Iterable[StreamEvent]:
         return _stream_with_approval(
             self._agent,
             {"messages": [{"role": "user", "content": prompt}]},
             config={"configurable": {"thread_id": self._thread_id}},
             reviewer=self._reviewer,
             thread_id=self._thread_id,
+            cancel_event=cancel_event,
         )
 
 
