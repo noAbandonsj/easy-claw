@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -60,6 +61,7 @@ def _stream_with_approval(
     config: dict[str, object],
     reviewer: ApprovalReviewer,
     thread_id: str,
+    cancel_event: threading.Event | None = None,
 ) -> Iterable[StreamEvent]:
     from langgraph.types import Command
 
@@ -68,6 +70,8 @@ def _stream_with_approval(
     next_input = input_value
 
     while True:
+        if cancel_event and cancel_event.is_set():
+            break
         interrupted = False
         try:
             for stream_item in agent.stream(
@@ -76,6 +80,10 @@ def _stream_with_approval(
                 stream_mode=["messages", "updates"],
                 version="v2",
             ):
+                if cancel_event and cancel_event.is_set():
+                    yield StreamEvent(type="interrupted", thread_id=thread_id)
+                    break
+
                 mode, payload = _stream_item_payload(stream_item)
 
                 interrupts = _extract_interrupts(payload)

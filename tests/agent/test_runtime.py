@@ -1,6 +1,7 @@
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
+import threading
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import (
@@ -703,3 +704,91 @@ def test_langchain_session_stream_resumes_real_human_interrupt():
         content="approved",
         thread_id="thread-1",
     )
+
+
+class FakeStreamingCancelAgent:
+    def __init__(self):
+        self.inputs = []
+
+    def stream(self, input_value, config, stream_mode, version=None):
+        self.inputs.append(input_value)
+        yield FakeStreamMessage("hello ")
+        yield FakeStreamMessage("world")
+
+
+def test_stream_with_approval_yields_interrupted_when_cancel_event_set():
+    from easy_claw.agent.streaming import _stream_with_approval
+
+    agent = FakeStreamingCancelAgent()
+    cancel_event = threading.Event()
+    cancel_event.set()
+
+    events = list(
+        _stream_with_approval(
+            agent,
+            {"messages": [{"role": "user", "content": "hello"}]},
+            config={"configurable": {"thread_id": "thread-1"}},
+            reviewer=StaticApprovalReviewer(approve=True),
+            thread_id="thread-1",
+            cancel_event=cancel_event,
+        )
+    )
+
+    assert events == [
+        StreamEvent(type="done", content="", thread_id="thread-1"),
+    ]
+
+
+def test_stream_with_approval_works_normally_without_cancel_event():
+    from easy_claw.agent.streaming import _stream_with_approval
+
+    agent = FakeStreamingCancelAgent()
+
+    events = list(
+        _stream_with_approval(
+            agent,
+            {"messages": [{"role": "user", "content": "hello"}]},
+            config={"configurable": {"thread_id": "thread-1"}},
+            reviewer=StaticApprovalReviewer(approve=True),
+            thread_id="thread-1",
+        )
+    )
+
+    assert events == [
+        StreamEvent(type="token", content="hello ", thread_id="thread-1"),
+        StreamEvent(type="token", content="world", thread_id="thread-1"),
+        StreamEvent(type="done", content="hello world", thread_id="thread-1"),
+    ]
+
+
+class FakeMidStreamCancelAgent:
+    def stream(self, input_value, config, stream_mode, version=None):
+        yield FakeStreamMessage("first ")
+        yield FakeStreamMessage("second")
+
+
+def test_stream_with_approval_cancel_during_stream_preserves_partial_content():
+    from easy_claw.agent.streaming import _stream_with_approval
+
+    agent = FakeMidStreamCancelAgent()
+    cancel_event = threading.Event()
+    events_collected = []
+
+    stream_iter = _stream_with_approval(
+        agent,
+        {"messages": [{"role": "user", "content": "hello"}]},
+        config={"configurable": {"thread_id": "thread-1"}},
+        reviewer=StaticApprovalReviewer(approve=True),
+        thread_id="thread-1",
+        cancel_event=cancel_event,
+    )
+
+    first = next(stream_iter)
+    events_collected.append(first)
+    cancel_event.set()
+    for event in stream_iter:
+        events_collected.append(event)
+
+    types = [e.type for e in events_collected]
+    assert "interrupted" in types
+    assert events_collected[-1].type == "done"
