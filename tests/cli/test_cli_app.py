@@ -221,6 +221,7 @@ def test_chat_interactive_uses_stream_when_session_supports_it(tmp_path, monkeyp
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("EASY_CLAW_MODEL", "deepseek-v4-pro")
     prompts = []
+    pause_events = []
 
     class FakeStreamingSession:
         def __enter__(self):
@@ -232,8 +233,9 @@ def test_chat_interactive_uses_stream_when_session_supports_it(tmp_path, monkeyp
         def run(self, prompt):
             raise AssertionError("interactive chat should prefer stream()")
 
-        def stream(self, prompt, cancel_event=None):
+        def stream(self, prompt, cancel_event=None, cancel_pause_event=None):
             prompts.append(prompt)
+            pause_events.append(cancel_pause_event)
             yield StreamEvent(type="token", content=f"stream: {prompt}")
             yield StreamEvent(type="done", content=f"stream: {prompt}", thread_id="thread-1")
 
@@ -253,6 +255,7 @@ def test_chat_interactive_uses_stream_when_session_supports_it(tmp_path, monkeyp
     assert result.exit_code == 0
     assert "stream: hello" in result.stdout
     assert prompts == ["hello"]
+    assert pause_events[0] is not None
     events = [
         log.event_type for log in AuditRepository(tmp_path / "data" / "easy-claw.db").list_logs()
     ]
@@ -525,7 +528,7 @@ def test_interactive_status_shows_streamed_token_usage(tmp_path, monkeypatch):
         def run(self, prompt):
             raise AssertionError("interactive chat should prefer stream()")
 
-        def stream(self, prompt, cancel_event=None):
+        def stream(self, prompt, cancel_event=None, cancel_pause_event=None):
             yield StreamEvent(type="token", content=f"stream: {prompt}")
             yield StreamEvent(
                 type="done",

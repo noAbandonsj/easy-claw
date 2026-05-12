@@ -735,6 +735,7 @@ def test_stream_with_approval_yields_interrupted_when_cancel_event_set():
     )
 
     assert events == [
+        StreamEvent(type="interrupted", thread_id="thread-1"),
         StreamEvent(type="done", content="", thread_id="thread-1"),
     ]
 
@@ -794,11 +795,70 @@ def test_stream_with_approval_cancel_during_stream_preserves_partial_content():
     assert events_collected[-1].type == "done"
 
 
+def test_stream_with_approval_sets_cancel_pause_event_during_review():
+    from easy_claw.agent.streaming import _stream_with_approval
+
+    agent = FakeStreamingInterruptAgent()
+    cancel_pause_event = threading.Event()
+    review_pause_states = []
+
+    class RecordingReviewer:
+        def review(self, interrupts):
+            review_pause_states.append(cancel_pause_event.is_set())
+            return [{"type": "approve"}]
+
+    events = list(
+        _stream_with_approval(
+            agent,
+            {"messages": [{"role": "user", "content": "hello"}]},
+            config={"configurable": {"thread_id": "thread-1"}},
+            reviewer=RecordingReviewer(),
+            thread_id="thread-1",
+            cancel_pause_event=cancel_pause_event,
+        )
+    )
+
+    assert events == [
+        StreamEvent(type="approval_required", thread_id="thread-1"),
+        StreamEvent(type="token", content="approved", thread_id="thread-1"),
+        StreamEvent(type="done", content="approved", thread_id="thread-1"),
+    ]
+    assert review_pause_states == [True]
+    assert not cancel_pause_event.is_set()
+
+
+def test_stream_with_approval_pauses_before_approval_required_event():
+    from easy_claw.agent.streaming import _stream_with_approval
+
+    agent = FakeStreamingInterruptAgent()
+    cancel_pause_event = threading.Event()
+
+    stream_iter = _stream_with_approval(
+        agent,
+        {"messages": [{"role": "user", "content": "hello"}]},
+        config={"configurable": {"thread_id": "thread-1"}},
+        reviewer=StaticApprovalReviewer(approve=True),
+        thread_id="thread-1",
+        cancel_pause_event=cancel_pause_event,
+    )
+
+    first = next(stream_iter)
+
+    assert first == StreamEvent(type="approval_required", thread_id="thread-1")
+    assert cancel_pause_event.is_set()
+    assert list(stream_iter)[-1] == StreamEvent(
+        type="done",
+        content="approved",
+        thread_id="thread-1",
+    )
+    assert not cancel_pause_event.is_set()
+
+
 def test_session_stream_passes_cancel_event_to_underlying_function(monkeypatch):
     captured_cancel = {}
 
     def fake_stream_with_approval(agent, input_value, *, config, reviewer, thread_id,
-                                  cancel_event=None):
+                                  cancel_event=None, cancel_pause_event=None):
         captured_cancel["event"] = cancel_event
         yield StreamEvent(type="token", content="ok", thread_id=thread_id)
         yield StreamEvent(type="done", content="ok", thread_id=thread_id)
@@ -825,7 +885,7 @@ def test_session_stream_works_without_cancel_event(monkeypatch):
     captured_cancel = {}
 
     def fake_stream_with_approval(agent, input_value, *, config, reviewer, thread_id,
-                                  cancel_event=None):
+                                  cancel_event=None, cancel_pause_event=None):
         captured_cancel["event"] = cancel_event
         yield StreamEvent(type="token", content="ok", thread_id=thread_id)
         yield StreamEvent(type="done", content="ok", thread_id=thread_id)
@@ -845,3 +905,30 @@ def test_session_stream_works_without_cancel_event(monkeypatch):
     list(session.stream("hello"))
 
     assert captured_cancel["event"] is None
+
+
+def test_session_stream_passes_cancel_pause_event_to_underlying_function(monkeypatch):
+    captured_pause = {}
+
+    def fake_stream_with_approval(agent, input_value, *, config, reviewer, thread_id,
+                                  cancel_event=None, cancel_pause_event=None):
+        captured_pause["event"] = cancel_pause_event
+        yield StreamEvent(type="token", content="ok", thread_id=thread_id)
+        yield StreamEvent(type="done", content="ok", thread_id=thread_id)
+
+    monkeypatch.setattr(
+        "easy_claw.agent.langchain_runtime._stream_with_approval",
+        fake_stream_with_approval,
+    )
+
+    cancel_pause_event = threading.Event()
+    session = LangChainAgentSession(
+        agent=FakeStreamingAgent(),
+        thread_id="thread-1",
+        reviewer=StaticApprovalReviewer(approve=True),
+        exit_stack=ExitStack(),
+    )
+
+    list(session.stream("hello", cancel_pause_event=cancel_pause_event))
+
+    assert captured_pause["event"] is cancel_pause_event

@@ -45,6 +45,30 @@ def test_watch_esc_key_exits_when_stopped():
     assert not cancel_event.is_set()
 
 
+def test_watch_esc_key_does_not_read_input_while_paused():
+    """审批输入期间暂停 Esc 监听，避免后台线程吞掉 yes/no 按键。"""
+    cancel_event = threading.Event()
+    paused = threading.Event()
+    paused.set()
+
+    class FakeStopped:
+        def __init__(self):
+            self.calls = 0
+
+        def wait(self, timeout):
+            self.calls += 1
+            return self.calls > 1
+
+    def fake_kbhit():
+        raise AssertionError("should not read console input while paused")
+
+    with mock.patch('msvcrt.kbhit', fake_kbhit):
+        from easy_claw.cli.interactive import _watch_esc_key
+        _watch_esc_key(cancel_event, FakeStopped(), paused)
+
+    assert not cancel_event.is_set()
+
+
 def test_render_streaming_turn_handles_interrupted_event(monkeypatch):
     """_render_streaming_turn 收到 interrupted 事件后打印提示。"""
     output = StringIO()

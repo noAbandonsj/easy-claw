@@ -180,7 +180,10 @@ class LangChainAgentSession:
         )
 
     def stream(
-        self, prompt: str, cancel_event: threading.Event | None = None
+        self,
+        prompt: str,
+        cancel_event: threading.Event | None = None,
+        cancel_pause_event: threading.Event | None = None,
     ) -> Iterable[StreamEvent]:
         return _stream_with_approval(
             self._agent,
@@ -189,6 +192,7 @@ class LangChainAgentSession:
             reviewer=self._reviewer,
             thread_id=self._thread_id,
             cancel_event=cancel_event,
+            cancel_pause_event=cancel_pause_event,
         )
 
 

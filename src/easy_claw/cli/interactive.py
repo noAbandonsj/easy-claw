@@ -113,8 +113,16 @@ def _run_interactive_chat(
             def run_turn(prompt: str) -> AgentResult:
                 return ensure_agent_session().run(prompt)
 
-            def stream_turn(prompt: str, cancel_event=None) -> Iterable[StreamEvent]:
-                return ensure_agent_session().stream(prompt, cancel_event=cancel_event)
+            def stream_turn(
+                prompt: str,
+                cancel_event=None,
+                cancel_pause_event=None,
+            ) -> Iterable[StreamEvent]:
+                return ensure_agent_session().stream(
+                    prompt,
+                    cancel_event=cancel_event,
+                    cancel_pause_event=cancel_pause_event,
+                )
 
         try:
             control = _run_interactive_loop(
@@ -181,7 +189,7 @@ def _run_interactive_loop(
     audit_repo: AuditRepository | None,
     session_id: str,
     session_config: AppConfig,
-    stream_turn: Callable[[str], Iterable[StreamEvent]] | None = None,
+    stream_turn: Callable[..., Iterable[StreamEvent]] | None = None,
     conversation: list[tuple[str, str]] | None = None,
     token_usage: dict[str, int] | None = None,
 ) -> LoopControl:
@@ -216,16 +224,21 @@ def _run_interactive_loop(
 
         if stream_turn is not None:
             cancel_event = threading.Event()
+            cancel_pause_event = threading.Event()
             stopped = threading.Event()
             listener = threading.Thread(
                 target=_watch_esc_key,
-                args=(cancel_event, stopped),
+                args=(cancel_event, stopped, cancel_pause_event),
                 daemon=True,
             )
             listener.start()
             try:
                 response, usage = _render_streaming_turn(
-                    stream_turn(prompt, cancel_event=cancel_event)
+                    stream_turn(
+                        prompt,
+                        cancel_event=cancel_event,
+                        cancel_pause_event=cancel_pause_event,
+                    )
                 )
             finally:
                 stopped.set()
@@ -371,10 +384,16 @@ def _agent_request_for_prompt(request: AgentRequest, prompt: str) -> AgentReques
     return dataclasses.replace(request, prompt=prompt)
 
 
-def _watch_esc_key(cancel_event: threading.Event, stopped: threading.Event) -> None:
+def _watch_esc_key(
+    cancel_event: threading.Event,
+    stopped: threading.Event,
+    paused: threading.Event | None = None,
+) -> None:
     import msvcrt
 
     while not stopped.wait(timeout=0.05):
+        if paused is not None and paused.is_set():
+            continue
         try:
             if msvcrt.kbhit():
                 ch = msvcrt.getch()

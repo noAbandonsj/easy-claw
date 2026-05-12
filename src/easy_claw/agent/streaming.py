@@ -62,6 +62,7 @@ def _stream_with_approval(
     reviewer: ApprovalReviewer,
     thread_id: str,
     cancel_event: threading.Event | None = None,
+    cancel_pause_event: threading.Event | None = None,
 ) -> Iterable[StreamEvent]:
     from langgraph.types import Command
 
@@ -71,6 +72,7 @@ def _stream_with_approval(
 
     while True:
         if cancel_event and cancel_event.is_set():
+            yield StreamEvent(type="interrupted", thread_id=thread_id)
             break
         interrupted = False
         try:
@@ -88,8 +90,14 @@ def _stream_with_approval(
 
                 interrupts = _extract_interrupts(payload)
                 if interrupts:
-                    yield StreamEvent(type="approval_required", thread_id=thread_id)
-                    decisions = reviewer.review(interrupts)
+                    if cancel_pause_event is not None:
+                        cancel_pause_event.set()
+                    try:
+                        yield StreamEvent(type="approval_required", thread_id=thread_id)
+                        decisions = reviewer.review(interrupts)
+                    finally:
+                        if cancel_pause_event is not None:
+                            cancel_pause_event.clear()
                     next_input = Command(resume={"decisions": decisions})
                     interrupted = True
                     break
