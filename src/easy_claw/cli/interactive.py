@@ -374,7 +374,7 @@ def _agent_request_for_prompt(request: AgentRequest, prompt: str) -> AgentReques
 def _watch_esc_key(cancel_event: threading.Event, stopped: threading.Event) -> None:
     import msvcrt
 
-    while not stopped.is_set():
+    while not stopped.wait(timeout=0.05):
         try:
             if msvcrt.kbhit():
                 ch = msvcrt.getch()

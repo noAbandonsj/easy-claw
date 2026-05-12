@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass, field
@@ -178,7 +179,9 @@ class LangChainAgentSession:
             usage=usage,
         )
 
-    def stream(self, prompt: str, cancel_event: Any = None) -> Iterable[StreamEvent]:
+    def stream(
+        self, prompt: str, cancel_event: threading.Event | None = None
+    ) -> Iterable[StreamEvent]:
         return _stream_with_approval(
             self._agent,
             {"messages": [{"role": "user", "content": prompt}]},
