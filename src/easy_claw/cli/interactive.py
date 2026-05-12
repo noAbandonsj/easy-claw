@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import threading
 from collections.abc import Callable, Iterable
 from math import ceil
 from pathlib import Path
@@ -112,8 +113,8 @@ def _run_interactive_chat(
             def run_turn(prompt: str) -> AgentResult:
                 return ensure_agent_session().run(prompt)
 
-            def stream_turn(prompt: str) -> Iterable[StreamEvent]:
-                return ensure_agent_session().stream(prompt)
+            def stream_turn(prompt: str, cancel_event=None) -> Iterable[StreamEvent]:
+                return ensure_agent_session().stream(prompt, cancel_event=cancel_event)
 
         try:
             control = _run_interactive_loop(
@@ -214,7 +215,20 @@ def _run_interactive_loop(
             continue
 
         if stream_turn is not None:
-            response, usage = _render_streaming_turn(stream_turn(prompt))
+            cancel_event = threading.Event()
+            stopped = threading.Event()
+            listener = threading.Thread(
+                target=_watch_esc_key,
+                args=(cancel_event, stopped),
+                daemon=True,
+            )
+            listener.start()
+            try:
+                response, usage = _render_streaming_turn(
+                    stream_turn(prompt, cancel_event=cancel_event)
+                )
+            finally:
+                stopped.set()
         else:
             with console.status("[dim]正在思考...[/]"):
                 result = run_turn(prompt)
@@ -357,6 +371,20 @@ def _agent_request_for_prompt(request: AgentRequest, prompt: str) -> AgentReques
     return dataclasses.replace(request, prompt=prompt)
 
 
+def _watch_esc_key(cancel_event: threading.Event, stopped: threading.Event) -> None:
+    import msvcrt
+
+    while not stopped.is_set():
+        try:
+            if msvcrt.kbhit():
+                ch = msvcrt.getch()
+                if ch == b'\x1b':
+                    cancel_event.set()
+                    break
+        except Exception:
+            break
+
+
 def _render_streaming_turn(events: Iterable[StreamEvent]) -> tuple[str, dict[str, int] | None]:
     """渲染一次流式回复，返回回复文本和用量。"""
     tokens: list[str] = []
@@ -397,6 +425,10 @@ def _render_streaming_turn(events: Iterable[StreamEvent]) -> tuple[str, dict[str
             elif event.type == "approval_required":
                 _print_stream_separator(printed_token)
                 console.print("[yellow]工具执行需要确认[/]")
+                printed_token = False
+            elif event.type == "interrupted":
+                _print_stream_separator(printed_token)
+                console.print("[yellow]已打断[/]")
                 printed_token = False
             elif event.type == "error":
                 _print_stream_separator(printed_token)
