@@ -34,7 +34,7 @@ def build_agent_middleware(
         middleware.append(
             SummarizationMiddleware(
                 model=summarization_model,
-                trigger=("tokens", 1280000),
+                trigger=("tokens", 200000),
                 keep=("messages", 10),
             )
         )
