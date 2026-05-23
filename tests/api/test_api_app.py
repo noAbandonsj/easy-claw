@@ -74,6 +74,32 @@ def test_runs_endpoint_is_removed():
     assert response.status_code == 404
 
 
+def test_web_ui_uses_split_static_assets(tmp_path):
+    client = TestClient(create_app(_test_config(tmp_path)))
+
+    html = client.get("/").text
+
+    assert '<link rel="stylesheet" href="/static/style.css">' in html
+    assert '<script src="/static/app.js" defer></script>' in html
+    assert "<style>" not in html
+    assert "<script>" not in html
+
+    css = client.get("/static/style.css")
+    js = client.get("/static/app.js")
+    assert css.status_code == 200
+    assert "--bg-deep" in css.text
+    assert js.status_code == 200
+    assert "function connect" in js.text
+    assert "innerHTML" not in js.text
+    assert "onclick=" not in js.text
+
+
+def test_uvicorn_websocket_protocol_dependency_is_importable():
+    from uvicorn.protocols.websockets.auto import AutoWebSocketsProtocol
+
+    assert AutoWebSocketsProtocol is not None
+
+
 def test_slash_commands_endpoint_uses_cli_registry(tmp_path):
     client = TestClient(create_app(_test_config(tmp_path)))
 
