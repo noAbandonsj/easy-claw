@@ -88,8 +88,13 @@ def test_web_ui_uses_split_static_assets(tmp_path):
     js = client.get("/static/app.js")
     assert css.status_code == 200
     assert "--bg-deep" in css.text
+    assert ".tool-panel .tool-summary" in css.text
+    assert ".tool-panel .tool-action" in css.text
     assert js.status_code == 200
     assert "function connect" in js.text
+    assert "function describeTool" in js.text
+    assert "function summarizeToolPayload" in js.text
+    assert "function copyToolPayload" in js.text
     assert "innerHTML" not in js.text
     assert "onclick=" not in js.text
 
