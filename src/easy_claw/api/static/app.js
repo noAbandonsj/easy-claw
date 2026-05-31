@@ -370,7 +370,7 @@ async function copyToolPayload(label, content) {
         await navigator.clipboard.writeText(content);
         topbarStatus.textContent = label + '已复制';
     } catch (e) {
-        topbarStatus.textContent = label + '失败：' + (e.message || '无法写入剪贴板');
+        topbarStatus.textContent = label + '失败：无法写入剪贴板';
     }
 }
 

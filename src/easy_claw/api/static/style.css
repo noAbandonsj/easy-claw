@@ -473,3 +473,38 @@ body {
     transition: all 0.2s;
 }
 .modal .close:hover { box-shadow: 0 0 16px #ff69b460; }
+
+@media (max-width: 640px) {
+    :root { --sidebar-width: 156px; }
+    #sidebar .sb-header { padding: 12px 8px; }
+    #session-list .session-item { padding: 7px 8px; }
+    #sb-status { padding: 8px; }
+    #topbar {
+        padding: 8px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    #topbar-status {
+        flex: 1 1 100%;
+        margin-left: 17px;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+    }
+    #messages { padding: 10px 8px; }
+    .tool-panel .tool-summary-row {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+    #input-area {
+        padding: 8px;
+        gap: 6px;
+    }
+    #input-area textarea {
+        padding: 9px 10px;
+        font-size: 13px;
+    }
+    #send-btn {
+        padding: 10px 14px;
+        font-size: 13px;
+    }
+}
