@@ -295,20 +295,83 @@ function finishAssistant() {
 }
 
 function addToolPanel(kind, name, content) {
-    const panel = document.createElement('div');
-    panel.className = 'tool-panel' + (kind === 'result' ? ' result' : '') + ' open';
-    const displayName = name || '未知工具';
-    const label = kind === 'call' ? '工具调用：' + displayName : '工具结果：' + displayName;
+    const panelKind = kind === 'result' ? 'result' : 'call';
+    const panel = el('div', { className: 'tool-panel ' + panelKind });
+    const descriptor = describeTool(name);
     const formatted = formatContent(content);
-    const header = el('div', { className: 'header ' + kind });
-    header.append(el('span', { text: label }), el('span', { className: 'arrow', text: '\u25b6' }));
+    const summaryRows = panelKind === 'result'
+        ? summarizeToolResult(content)
+        : summarizeToolPayload(content);
+
+    const header = el('button', { className: 'header ' + panelKind });
+    header.type = 'button';
+
+    const title = el('span', { className: 'tool-title-block' });
+    const meta = el('span', { className: 'tool-meta' });
+    meta.append(
+        el('span', { className: 'tool-badge', text: descriptor.category }),
+        el('span', {
+            className: 'tool-phase',
+            text: panelKind === 'result' ? '结果' : '调用',
+        }),
+    );
+    title.append(
+        meta,
+        el('span', { className: 'tool-name', text: descriptor.name }),
+        el('span', { className: 'tool-explanation', text: descriptor.explanation }),
+    );
+
+    header.append(title, el('span', { className: 'arrow', text: '\u25b6' }));
     header.addEventListener('click', () => togglePanel(panel));
-    panel.append(header, el('div', { className: 'body', text: formatted }));
+
+    const summary = el('div', { className: 'tool-summary' });
+    summaryRows.forEach(([label, value]) => {
+        const row = el('div', { className: 'tool-summary-row' });
+        row.append(
+            el('span', { className: 'tool-summary-key', text: label }),
+            el('span', { className: 'tool-summary-value', text: value }),
+        );
+        summary.append(row);
+    });
+
+    const actions = el('div', { className: 'tool-actions' });
+    const expandButton = el('button', { className: 'tool-action tool-expand', text: '展开详情' });
+    expandButton.type = 'button';
+    expandButton.addEventListener('click', () => togglePanel(panel));
+
+    const copyLabel = panelKind === 'result' ? '复制结果' : '复制参数';
+    const copyButton = el('button', { className: 'tool-action', text: copyLabel });
+    copyButton.type = 'button';
+    copyButton.addEventListener('click', () => copyToolPayload(copyLabel, formatted));
+    actions.append(expandButton, copyButton);
+
+    panel.append(
+        header,
+        summary,
+        actions,
+        el('div', { className: 'body', text: formatted }),
+    );
     msgEl.appendChild(panel);
 }
 
 function togglePanel(panel) {
     panel.classList.toggle('open');
+    const expandButton = panel.querySelector('.tool-expand');
+    if (expandButton) {
+        expandButton.textContent = panel.classList.contains('open') ? '收起详情' : '展开详情';
+    }
+}
+
+async function copyToolPayload(label, content) {
+    try {
+        if (!navigator.clipboard || !navigator.clipboard.writeText) {
+            throw new Error('浏览器不支持剪贴板写入');
+        }
+        await navigator.clipboard.writeText(content);
+        topbarStatus.textContent = label + '已复制';
+    } catch (e) {
+        topbarStatus.textContent = label + '失败：' + (e.message || '无法写入剪贴板');
+    }
 }
 
 function formatContent(val) {
