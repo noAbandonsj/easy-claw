@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -19,6 +20,18 @@ except ImportError:  # pragma: no cover
     MultiServerMCPClient = None
 
 _ENV_REF_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+_DEFAULT_MCP_TIMEOUT = 10.0
+
+
+def _read_mcp_timeout() -> float:
+    raw = os.environ.get("EASY_CLAW_MCP_TIMEOUT", "")
+    if not raw.strip():
+        return _DEFAULT_MCP_TIMEOUT
+    try:
+        value = float(raw)
+        return value if value > 0 else _DEFAULT_MCP_TIMEOUT
+    except ValueError:
+        return _DEFAULT_MCP_TIMEOUT
 
 
 def build_mcp_tools(*, enabled: bool | str, config_path: str) -> ToolBundle:
@@ -53,14 +66,25 @@ def build_mcp_tools(*, enabled: bool | str, config_path: str) -> ToolBundle:
     if not servers_config:
         return ToolBundle()
 
+    per_server_timeout = _read_mcp_timeout()
+    overall_timeout = per_server_timeout * len(servers_config) + 10.0
+
     loop = get_background_loop()
     try:
         client, server_tools, errors = loop.run_coroutine(
             _async_init_mcp(
                 servers_config,
                 tolerate_errors=mode == "auto",
-            )
+                per_server_timeout=per_server_timeout,
+            ),
+            timeout=overall_timeout,
         )
+    except TimeoutError as exc:
+        msg = f"MCP 工具初始化总超时（{overall_timeout}秒）"
+        if mode == "auto":
+            _warn_auto_disabled(msg)
+            return ToolBundle()
+        raise ToolExecutionError(msg) from exc
     except Exception as exc:
         if mode == "auto":
             _warn_auto_disabled(f"无法从 {config_file} 加载工具：{exc}")
@@ -250,14 +274,25 @@ async def _async_init_mcp(
     servers_config: dict,
     *,
     tolerate_errors: bool = False,
+    per_server_timeout: float = _DEFAULT_MCP_TIMEOUT,
 ) -> tuple[object, list[tuple[str, object]], dict[str, str]]:
     client = MultiServerMCPClient(servers_config)
     tools: list[tuple[str, object]] = []
     errors: dict[str, str] = {}
     for server_name in servers_config:
         try:
-            for tool in await client.get_tools(server_name=server_name):
+            result = await asyncio.wait_for(
+                client.get_tools(server_name=server_name),
+                timeout=per_server_timeout,
+            )
+            for tool in result:
                 tools.append((server_name, tool))
+        except TimeoutError as exc:
+            msg = f"MCP 服务 '{server_name}' 初始化超时（{per_server_timeout}秒）"
+            if tolerate_errors:
+                errors[server_name] = msg
+            else:
+                raise TimeoutError(msg) from exc
         except Exception as exc:  # pragma: no cover - concrete errors depend on MCP servers
             if tolerate_errors:
                 errors[server_name] = str(exc)

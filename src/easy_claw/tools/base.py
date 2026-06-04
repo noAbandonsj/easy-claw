@@ -26,12 +26,24 @@ class _BackgroundEventLoop:
         )
         self._thread.start()
 
-    def run_coroutine(self, coro: Coroutine[Any, Any, Any]) -> Any:
-        """把协程提交到后台循环，并阻塞等待完成。"""
+    def run_coroutine(
+        self,
+        coro: Coroutine[Any, Any, Any],
+        timeout: float | None = None,
+    ) -> Any:
+        """把协程提交到后台循环，并阻塞等待完成。
+
+        *timeout* 秒后仍未完成则取消协程并抛出
+        ``concurrent.futures.TimeoutError``。
+        """
         if self._loop.is_closed():
             raise RuntimeError("后台事件循环已关闭")
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-        return future.result()
+        try:
+            return future.result(timeout=timeout)
+        except TimeoutError:
+            future.cancel()
+            raise
 
     def call_soon(self, callback: Any, *args: Any) -> None:
         """在后台循环上调度回调，不等待结果。"""

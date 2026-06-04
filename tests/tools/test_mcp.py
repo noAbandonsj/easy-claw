@@ -1,10 +1,11 @@
+import asyncio
 from pathlib import Path
 
 import pytest
 from langchain_core.tools import StructuredTool, ToolException
 
 from easy_claw.tools.base import ToolExecutionError
-from easy_claw.tools.mcp import _read_servers_config, build_mcp_tools
+from easy_claw.tools.mcp import _read_mcp_timeout, _read_servers_config, build_mcp_tools
 
 
 def test_default_example_config_contains_default_mcp_servers(monkeypatch):
@@ -396,3 +397,109 @@ class TestBuildMcpToolsSuccess:
 
         assert "MCP 工具 'mcp__srv__maps_weather' 调用失败" in result
         assert "connection closed" in result
+
+
+class TestBuildMcpToolsTimeout:
+    def test_auto_skips_server_that_times_out(self, tmp_path, monkeypatch):
+        config_file = tmp_path / "servers.json"
+        config_file.write_text(
+            '{"slow": {"command": "slow", "args": [], "transport": "stdio"}, '
+            '"fast": {"command": "fast", "args": [], "transport": "stdio"}}'
+        )
+
+        class FakeTool:
+            def __init__(self, name):
+                self.name = name
+
+        class FakeClient:
+            def __init__(self, config):
+                pass
+
+            async def get_tools(self, *, server_name=None):
+                if server_name == "slow":
+                    await asyncio.sleep(999)
+                return [FakeTool("fast_tool")]
+
+            async def close(self):
+                pass
+
+        monkeypatch.setattr(
+            "easy_claw.tools.mcp.MultiServerMCPClient",
+            FakeClient,
+            raising=False,
+        )
+        monkeypatch.setenv("EASY_CLAW_MCP_TIMEOUT", "0.1")
+
+        with pytest.warns(RuntimeWarning, match="初始化超时"):
+            bundle = build_mcp_tools(enabled="auto", config_path=str(config_file))
+
+        assert [t.name for t in bundle.tools] == ["mcp__fast__fast_tool"]
+
+    def test_enabled_raises_when_server_times_out(self, tmp_path, monkeypatch):
+        config_file = tmp_path / "servers.json"
+        config_file.write_text(
+            '{"slow": {"command": "slow", "args": [], "transport": "stdio"}}'
+        )
+
+        class FakeClient:
+            def __init__(self, config):
+                pass
+
+            async def get_tools(self, *, server_name=None):
+                await asyncio.sleep(999)
+
+            async def close(self):
+                pass
+
+        monkeypatch.setattr(
+            "easy_claw.tools.mcp.MultiServerMCPClient",
+            FakeClient,
+            raising=False,
+        )
+        monkeypatch.setenv("EASY_CLAW_MCP_TIMEOUT", "0.1")
+
+        with pytest.raises(ToolExecutionError, match="总超时"):
+            build_mcp_tools(enabled=True, config_path=str(config_file))
+
+    def test_overall_timeout_fires_as_safety_net(self, tmp_path, monkeypatch):
+        config_file = tmp_path / "servers.json"
+        config_file.write_text(
+            '{"stuck": {"command": "stuck", "args": [], "transport": "stdio"}}'
+        )
+
+        async def hanging_init(
+            servers_config, *, tolerate_errors=False, per_server_timeout=30.0
+        ):
+            await asyncio.sleep(999)
+            return None, [], {}
+
+        monkeypatch.setattr(
+            "easy_claw.tools.mcp._async_init_mcp",
+            hanging_init,
+        )
+        monkeypatch.setenv("EASY_CLAW_MCP_TIMEOUT", "0.1")
+
+        with pytest.raises(ToolExecutionError, match="总超时"):
+            build_mcp_tools(enabled=True, config_path=str(config_file))
+
+    def test_run_coroutine_timeout(self):
+        from easy_claw.tools.base import _BackgroundEventLoop
+
+        loop = _BackgroundEventLoop()
+        try:
+
+            async def slow():
+                await asyncio.sleep(999)
+
+            with pytest.raises(TimeoutError):
+                loop.run_coroutine(slow(), timeout=0.1)
+        finally:
+            loop.shutdown()
+
+    def test_default_timeout_used_when_env_var_unset(self, monkeypatch):
+        monkeypatch.delenv("EASY_CLAW_MCP_TIMEOUT", raising=False)
+        assert _read_mcp_timeout() == 10.0
+
+    def test_invalid_timeout_env_var_falls_back_to_default(self, monkeypatch):
+        monkeypatch.setenv("EASY_CLAW_MCP_TIMEOUT", "not-a-number")
+        assert _read_mcp_timeout() == 10.0
