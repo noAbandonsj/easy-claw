@@ -13,6 +13,7 @@ from easy_claw.agent.langchain_runtime import AgentRequest, LangChainAgentRuntim
 from easy_claw.api.schemas import CreateSessionRequest
 from easy_claw.api.websocket import event_to_dict as _event_to_dict
 from easy_claw.api.websocket import next_stream_event_or_none as _next_stream_event_or_none
+from easy_claw.api.websocket import parse_client_message as _parse_client_message
 from easy_claw.cli.slash import get_slash_command_specs
 from easy_claw.config import AppConfig, load_config
 from easy_claw.skills import resolve_skill_sources
@@ -222,7 +223,11 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
         try:
             while True:
-                text = await websocket.receive_text()
+                raw_message = await websocket.receive_text()
+                payload = _parse_client_message(raw_message)
+                if payload.get("type") != "prompt":
+                    continue
+                text = str(payload.get("content") or "")
                 if not text.strip():
                     continue
 

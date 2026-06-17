@@ -1,8 +1,19 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 
 from easy_claw.agent.streaming import StreamEvent
+
+
+def parse_client_message(raw: str) -> dict[str, object]:
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return {"type": "prompt", "content": raw}
+    if not isinstance(payload, dict):
+        return {"type": "prompt", "content": raw}
+    return payload
 
 
 def event_to_dict(event: StreamEvent) -> dict[str, object]:

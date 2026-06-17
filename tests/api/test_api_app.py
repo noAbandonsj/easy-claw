@@ -1,10 +1,12 @@
 import asyncio
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from easy_claw.agent.streaming import StreamEvent
 from easy_claw.api.app import create_app
+from easy_claw.api.websocket import parse_client_message
 from easy_claw.api.websocket import next_stream_event_or_none as _next_stream_event_or_none
 from easy_claw.cli.slash import get_slash_command_specs
 from easy_claw.config import AppConfig
@@ -267,6 +269,45 @@ def test_websocket_chat_can_resume_existing_session_by_prefix(tmp_path, monkeypa
 
     assert banner["session_id"] == "resume12"
     assert captured_requests[0].thread_id == record.id
+
+
+def test_parse_client_message_accepts_structured_prompt():
+    assert parse_client_message(json.dumps({"type": "prompt", "content": "你好"})) == {
+        "type": "prompt",
+        "content": "你好",
+    }
+    assert parse_client_message("你好") == {"type": "prompt", "content": "你好"}
+
+
+def test_websocket_chat_uses_structured_prompt_content(tmp_path, monkeypatch):
+    captured_prompts = []
+
+    class FakeSession:
+        def close(self):
+            pass
+
+        def stream(self, text):
+            captured_prompts.append(text)
+            yield StreamEvent(type="done", content=text, thread_id="thread-1")
+
+    class FakeRuntime:
+        def __init__(self, reviewer):
+            self.reviewer = reviewer
+
+        def open_session(self, request):
+            return FakeSession()
+
+    monkeypatch.setattr("easy_claw.api.app.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.api.app.resolve_skill_sources", lambda **kwargs: [])
+    client = TestClient(create_app(_test_config(tmp_path)))
+
+    with client.websocket_connect("/ws/chat") as websocket:
+        websocket.receive_json()
+        websocket.send_json({"type": "prompt", "content": "结构化消息"})
+        websocket.receive_json()
+        websocket.close()
+
+    assert captured_prompts == ["结构化消息"]
 
 
 def test_next_stream_event_or_none_returns_event_from_executor():
