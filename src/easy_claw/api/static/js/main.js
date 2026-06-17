@@ -12,6 +12,7 @@ import { createToolPanel } from './render/toolPanel.js';
 import { handleSlash } from './slash.js';
 import { connectChat, disconnectChat } from './socket.js';
 import { resetConversationState, state } from './state.js';
+import { statusForStreamEvent } from './status.js';
 import { ToolRunStore } from './tools.js';
 
 const toolRunStore = new ToolRunStore();
@@ -57,6 +58,7 @@ function disconnect() {
 }
 
 function handleMessage(msg) {
+    const nextStatus = statusForStreamEvent(msg);
     switch (msg.type) {
         case 'banner':
             state.modelName = msg.model || '';
@@ -65,7 +67,6 @@ function handleMessage(msg) {
             state.sessionId = msg.session_id || '';
             updateTopbar();
             updateStatusBar();
-            setStatus('就绪');
             loadSessions();
             break;
         case 'token':
@@ -74,15 +75,12 @@ function handleMessage(msg) {
         case 'tool_call_start':
             finishAssistant(state);
             addToolRun(msg.tool_name, msg.tool_args);
-            setStatus('调用工具：' + (msg.tool_name || '未知'));
             break;
         case 'tool_call_result':
             finishToolRun(msg.tool_name, msg.tool_result || msg.content);
-            setStatus('就绪');
             break;
         case 'approval_required':
             finishAssistant(state);
-            setStatus('工具执行需要确认（已自动批准）');
             break;
         case 'done':
             finishAssistant(state);
@@ -91,13 +89,12 @@ function handleMessage(msg) {
                 updateStatusBar();
             }
             state.turnCount += 1;
-            setStatus('就绪');
             break;
         case 'error':
             finishAssistant(state);
-            setStatus('错误：' + msg.content);
             break;
     }
+    if (nextStatus) setStatus(nextStatus);
     scrollBottom();
 }
 

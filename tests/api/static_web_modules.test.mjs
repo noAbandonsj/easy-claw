@@ -16,6 +16,9 @@ const {
   summarizeToolPayload,
   summarizeToolResult,
 } = await importBrowserModule('../../src/easy_claw/api/static/js/tools.js');
+const {
+  statusForStreamEvent,
+} = await importBrowserModule('../../src/easy_claw/api/static/js/status.js');
 
 test('markdownToBlocks preserves common chat markdown without evaluating HTML', () => {
   const blocks = markdownToBlocks(`# 标题
@@ -41,6 +44,24 @@ uv run pytest
   assert.equal(blocks[3].language, 'powershell');
   assert.equal(blocks[3].text, 'uv run pytest');
   assert.equal(blocks[4].text, '<script>alert(1)</script>');
+});
+
+test('markdownToBlocks parses pipe tables into structured rows', () => {
+  const blocks = markdownToBlocks(`| 文件 | 作用 | 风险 |
+|---|---|---|
+| README.md | 项目说明 | 文档过期 |
+| pyproject.toml | 依赖配置 | 版本漂移 |`);
+
+  assert.deepEqual(blocks, [
+    {
+      type: 'table',
+      headers: ['文件', '作用', '风险'],
+      rows: [
+        ['README.md', '项目说明', '文档过期'],
+        ['pyproject.toml', '依赖配置', '版本漂移'],
+      ],
+    },
+  ]);
 });
 
 test('inlineTokens identifies emphasis, code, and links as renderable tokens', () => {
@@ -78,4 +99,13 @@ test('tool summaries keep the useful fields visible', () => {
     ['摘要', 'line 1 line 2'],
     ['长度', '13 字符'],
   ]);
+});
+
+test('stream status stays busy between tool result and final done event', () => {
+  assert.equal(
+    statusForStreamEvent({ type: 'tool_call_result', tool_name: 'read_file' }),
+    '整理回复...',
+  );
+  assert.equal(statusForStreamEvent({ type: 'token', content: 'hello' }), '回复中...');
+  assert.equal(statusForStreamEvent({ type: 'done' }), '就绪');
 });

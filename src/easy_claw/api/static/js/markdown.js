@@ -37,6 +37,13 @@ export function markdownToBlocks(markdown) {
             continue;
         }
 
+        const table = readTable(lines, index);
+        if (table) {
+            blocks.push(table.block);
+            index = table.nextIndex;
+            continue;
+        }
+
         const list = readList(lines, index);
         if (list) {
             blocks.push(list.block);
@@ -49,6 +56,7 @@ export function markdownToBlocks(markdown) {
             if (
                 lines[index].startsWith('```')
                 || /^(#{1,6})\s+/.test(lines[index])
+                || isTableStart(lines, index)
                 || /^\s*(?:[-*]|\d+\.)\s+/.test(lines[index])
             ) {
                 break;
@@ -62,6 +70,50 @@ export function markdownToBlocks(markdown) {
     }
 
     return blocks;
+}
+
+function readTable(lines, startIndex) {
+    if (!isTableStart(lines, startIndex)) return null;
+
+    const headers = splitTableRow(lines[startIndex]);
+    const rows = [];
+    let index = startIndex + 2;
+    while (index < lines.length && isPipeRow(lines[index])) {
+        const row = splitTableRow(lines[index]);
+        if (row.length === headers.length) {
+            rows.push(row);
+        }
+        index += 1;
+    }
+
+    return {
+        block: { type: 'table', headers, rows },
+        nextIndex: index,
+    };
+}
+
+function isTableStart(lines, index) {
+    return isPipeRow(lines[index])
+        && index + 1 < lines.length
+        && isTableSeparator(lines[index + 1]);
+}
+
+function isPipeRow(line) {
+    return typeof line === 'string' && line.includes('|') && splitTableRow(line).length > 1;
+}
+
+function isTableSeparator(line) {
+    const cells = splitTableRow(line);
+    return cells.length > 1 && cells.every(cell => /^:?-{3,}:?$/.test(cell));
+}
+
+function splitTableRow(line) {
+    return String(line || '')
+        .trim()
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split('|')
+        .map(cell => cell.trim());
 }
 
 function readList(lines, startIndex) {
@@ -144,9 +196,38 @@ function renderBlock(block, doc) {
         }
         return list;
     }
+    if (block.type === 'table') {
+        return renderTable(block, doc);
+    }
     const paragraph = doc.createElement('p');
     appendInline(paragraph, block.text, doc);
     return paragraph;
+}
+
+function renderTable(block, doc) {
+    const table = doc.createElement('table');
+    const thead = doc.createElement('thead');
+    const headRow = doc.createElement('tr');
+    for (const header of block.headers) {
+        const cell = doc.createElement('th');
+        appendInline(cell, header, doc);
+        headRow.append(cell);
+    }
+    thead.append(headRow);
+    table.append(thead);
+
+    const tbody = doc.createElement('tbody');
+    for (const row of block.rows) {
+        const tableRow = doc.createElement('tr');
+        for (const value of row) {
+            const cell = doc.createElement('td');
+            appendInline(cell, value, doc);
+            tableRow.append(cell);
+        }
+        tbody.append(tableRow);
+    }
+    table.append(tbody);
+    return table;
 }
 
 function appendInline(parent, text, doc) {

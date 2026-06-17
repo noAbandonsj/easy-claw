@@ -229,13 +229,15 @@ body {
 .markdown-body p,
 .markdown-body ul,
 .markdown-body ol,
-.markdown-body pre {
+.markdown-body pre,
+.markdown-body table {
     margin: 0 0 10px;
 }
 .markdown-body p:last-child,
 .markdown-body ul:last-child,
 .markdown-body ol:last-child,
-.markdown-body pre:last-child {
+.markdown-body pre:last-child,
+.markdown-body table:last-child {
     margin-bottom: 0;
 }
 .markdown-body h1,
@@ -283,6 +285,26 @@ body {
 }
 .markdown-body a:hover {
     color: var(--cyan);
+}
+.markdown-body table {
+    width: 100%;
+    border-collapse: collapse;
+    display: block;
+    overflow-x: auto;
+    font-size: 12px;
+    white-space: normal;
+}
+.markdown-body th,
+.markdown-body td {
+    padding: 6px 8px;
+    border: 1px solid #ffffff14;
+    text-align: left;
+    vertical-align: top;
+}
+.markdown-body th {
+    color: var(--cyan-dim);
+    background: #00ffff0a;
+    font-weight: 600;
 }
 .message.assistant .cursor {
     display: inline-block;
