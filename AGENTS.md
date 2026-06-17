@@ -8,11 +8,12 @@ This file is for coding agents that maintain `easy-claw`. Read it before editing
 
 - a Typer CLI and interactive terminal chat;
 - a FastAPI local web/API server with a WebSocket chat endpoint;
+- a React + TypeScript + Vite local web UI served by FastAPI;
 - a LangChain `create_agent` runtime backed by LangGraph checkpoints;
 - local tools for search, shell commands, Python snippets, document reading, file operations, browser automation, MCP tools, and Markdown skills;
 - SQLite-backed session and audit metadata under `data/`.
 
-The current package version is `0.5.0`. The repository uses a `src/` layout and `uv` for dependency management.
+The current package version is `0.5.0`. The repository uses a Python `src/` layout, `uv` for Python dependency management, and `npm` for the `frontend/` workspace.
 
 ## First Checks
 
@@ -28,6 +29,7 @@ Do not commit local runtime state or secrets. These are intentionally untracked:
 - `.env`, `.env.*` except `.env.example`
 - `mcp_servers.json`
 - `.venv/`, `.pytest_cache/`, `.ruff_cache/`, `__pycache__/`
+- `frontend/node_modules/`, `frontend/dist/`
 - `data/`, `runtime/`, `tmp/`, `.worktrees/`
 - `.codex/`, `.workbuddy/`, editor directories
 
@@ -40,6 +42,11 @@ Run targeted tests while developing, then run the full checks before finishing:
 ```powershell
 uv run pytest
 uv run ruff check .
+Push-Location frontend
+npm run test:run
+npm run lint
+npm run build
+Pop-Location
 ```
 
 Formatting command:
@@ -89,7 +96,7 @@ Agent runtime:
 - `agent/types.py` defines `ToolContext` and `ToolBundle`.
 - `agent/toolset.py` composes core, file, browser, and MCP tool bundles.
 - `agent/middleware.py` builds LangChain middleware: workspace file search, call limits, todo list, optional HITL, and summarization.
-- `agent/approvals.py` implements console and static approval reviewers.
+- `agent/approvals.py` implements console, static, and WebSocket-backed approval reviewers.
 - `agent/streaming.py` converts LangGraph/LangChain stream items into `StreamEvent` records for CLI and WebSocket rendering.
 - `agent/skill_tools.py` exposes `list_skills` and `read_skill` tools to the agent.
 - `agent/prompts.py` builds the system prompt and injects skill summaries.
@@ -103,10 +110,16 @@ CLI:
 
 API/Web:
 
-- `api/app.py` creates the FastAPI app, static root, health endpoint, capability endpoints, session endpoints, and `/ws/chat`.
-- `api/websocket.py` converts stream events to JSON and bridges blocking stream iteration into async WebSocket flow.
+- `api/app.py` creates the FastAPI app, serves the React production build from `frontend/dist/` at `/` and `/app`, exposes health/capability/session endpoints, and owns `/ws/chat`.
+- `api/websocket.py` parses structured client messages, converts stream events to JSON, and bridges blocking stream iteration into async WebSocket flow.
 - `api/schemas.py` contains Pydantic request models.
-- `api/static/index.html` is the current single-file web UI. It talks to `/ws/chat`, `/slash-commands`, `/sessions`, `/skills`, `/mcp`, and `/browser`.
+
+Frontend:
+
+- `frontend/` is a React + TypeScript + Vite app. Build it with `npm run build` before serving the source checkout as a Web app.
+- `frontend/src/api/` contains REST and WebSocket client helpers for `/ws/chat`, `/slash-commands`, `/sessions`, `/skills`, `/mcp`, and `/browser`.
+- `frontend/src/state/` contains pure reducers for `MessageBlock[]`, status mapping, and slash-command parsing.
+- `frontend/src/components/` contains the React shell, session list, chat input, message blocks, tool cards, Markdown/code rendering, capability dialogs, and approval cards.
 
 Tools:
 
@@ -193,6 +206,7 @@ Test layout mirrors source layout:
 - `tests/core/`: config, package metadata, scripts, skills, structure.
 - `tests/storage/`: repositories and DB behavior.
 - `tests/tools/`: command, browser, document, file, MCP, Python, search tools.
+- `frontend/src/**/*.test.ts(x)`: frontend reducer, client, hook, and component behavior.
 
 Prefer focused tests for the module being changed. Use `tmp_path`, monkeypatches, fake agents/models, and `StaticApprovalReviewer` instead of hitting real model providers, browsers, MCP servers, or external APIs.
 
@@ -202,6 +216,7 @@ When changing:
 - config parsing: update `tests/core/test_config.py` and `.env.example`;
 - CLI slash commands: update `src/easy_claw/cli/slash.py`, README/docs, and CLI/API tests if Web depends on command specs;
 - streaming events: update `tests/agent/test_runtime.py`, CLI rendering tests, and API WebSocket tests as needed;
+- React Web UI behavior: update `frontend/src` tests, run `npm run test:run`, `npm run lint`, and `npm run build`, and update API tests when the WebSocket or REST contract changes;
 - MCP behavior: update `tests/tools/test_mcp.py` and keep `mcp_servers.json.example` aligned;
 - skill discovery: update `tests/core/test_skills.py`, `tests/agent/test_skill_tools.py`, and `docs/skills.md`.
 
@@ -236,8 +251,7 @@ This file, `AGENTS.md`, is the maintainer/AI coding guide. Keep it current when 
 ## Known Current Limits
 
 - Execution is local; there is no Docker/WSL sandbox implementation yet.
-- Web approval flow is basic compared with terminal approval.
+- Web approval flow exists in the React UI but remains single-user/local and intentionally minimal.
 - MCP live health checks are limited; `doctor` mostly reports config/counts.
 - Long-running task recovery beyond LangGraph checkpoints is still planned.
-- The web UI is a single static HTML file served by FastAPI.
-
+- Source checkouts must build `frontend/dist/` before `uv run easy-claw serve` can serve the Web UI.
