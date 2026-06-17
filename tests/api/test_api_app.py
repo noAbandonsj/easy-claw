@@ -80,25 +80,31 @@ def test_web_ui_uses_split_static_assets(tmp_path):
     html = client.get("/").text
 
     assert '<link rel="stylesheet" href="/static/style.css">' in html
-    assert '<script src="/static/app.js" defer></script>' in html
+    assert '<script type="module" src="/static/js/main.js"></script>' in html
     assert "<style>" not in html
     assert "<script>" not in html
 
     css = client.get("/static/style.css")
-    js = client.get("/static/app.js")
+    main_js = client.get("/static/js/main.js")
+    socket_js = client.get("/static/js/socket.js")
+    markdown_js = client.get("/static/js/markdown.js")
+    tools_js = client.get("/static/js/tools.js")
     assert css.status_code == 200
     assert "--bg-deep" in css.text
     assert ".tool-panel .tool-summary" in css.text
     assert ".tool-panel .tool-action" in css.text
     assert "@media (max-width: 640px)" in css.text
-    assert js.status_code == 200
-    assert "function connect" in js.text
-    assert "function describeTool" in js.text
-    assert "function summarizeToolPayload" in js.text
-    assert "function copyToolPayload" in js.text
-    assert "label + '失败：无法写入剪贴板'" in js.text
-    assert "innerHTML" not in js.text
-    assert "onclick=" not in js.text
+    assert main_js.status_code == 200
+    assert socket_js.status_code == 200
+    assert markdown_js.status_code == 200
+    assert tools_js.status_code == 200
+    assert "connectChat" in socket_js.text
+    assert "function describeTool" in tools_js.text
+    assert "function markdownToBlocks" in markdown_js.text
+    assert "label + '失败：无法写入剪贴板'" in tools_js.text
+    for payload in (main_js.text, socket_js.text, markdown_js.text, tools_js.text):
+        assert "innerHTML" not in payload
+        assert "onclick=" not in payload
 
 
 def test_uvicorn_websocket_protocol_dependency_is_importable():

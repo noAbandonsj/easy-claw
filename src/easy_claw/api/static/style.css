@@ -223,6 +223,67 @@ body {
     border-bottom-left-radius: 3px;
     min-width: 60px;
 }
+.message.assistant.markdown-body {
+    white-space: normal;
+}
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body pre {
+    margin: 0 0 10px;
+}
+.markdown-body p:last-child,
+.markdown-body ul:last-child,
+.markdown-body ol:last-child,
+.markdown-body pre:last-child {
+    margin-bottom: 0;
+}
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+    margin: 0 0 8px;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.4;
+}
+.markdown-body ul,
+.markdown-body ol {
+    padding-left: 20px;
+}
+.markdown-body li + li {
+    margin-top: 4px;
+}
+.markdown-body pre {
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 10px;
+    border: 1px solid #ffffff12;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.28);
+    white-space: pre;
+}
+.markdown-body code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 12px;
+}
+.markdown-body p code,
+.markdown-body li code {
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: #ffffff10;
+    color: var(--cyan-dim);
+}
+.markdown-body a {
+    color: var(--cyan-dim);
+    text-decoration: none;
+    border-bottom: 1px solid #00ffff40;
+}
+.markdown-body a:hover {
+    color: var(--cyan);
+}
 .message.assistant .cursor {
     display: inline-block;
     width: 7px;
@@ -367,6 +428,23 @@ body {
     white-space: pre-wrap;
     word-break: break-all;
     display: none;
+}
+.tool-panel .tool-detail-section + .tool-detail-section {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #ffffff12;
+}
+.tool-panel .tool-detail-title {
+    margin-bottom: 6px;
+    color: var(--dim);
+    font-family: inherit;
+    font-size: 11px;
+}
+.tool-panel .tool-detail-body {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: inherit;
 }
 .tool-panel.open .body { display: block; }
 .tool-panel .arrow {
