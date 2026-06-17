@@ -6,9 +6,40 @@ This project uses a `src/` layout and keeps runtime state out of the tracked tre
 
 ```powershell
 uv sync
+Push-Location frontend
+npm install
+npm run test:run
+npm run lint
+npm run build
+Pop-Location
 uv run pytest
 uv run ruff check .
 uv run ruff format .
+```
+
+## Web Frontend
+
+The Web UI is a React + TypeScript + Vite app in `frontend/`. The FastAPI server
+serves the production build from `frontend/dist/` at both `/` and `/app`.
+
+Build the production Web UI before running the source checkout as a Web app:
+
+```powershell
+Push-Location frontend
+npm install
+npm run build
+Pop-Location
+uv run easy-claw serve
+```
+
+For frontend development, run the backend and Vite dev server in separate
+terminals:
+
+```powershell
+uv run easy-claw serve
+Push-Location frontend
+npm run dev
+Pop-Location
 ```
 
 ## Source Layout
@@ -31,6 +62,12 @@ src/easy_claw/
     views.py              # Rich rendering helpers
   storage/
   tools/
+frontend/
+  src/
+    api/                 # REST and WebSocket client helpers
+    components/          # React UI components
+    hooks/               # browser runtime hooks
+    state/               # pure reducers and command parsing
 ```
 
 ## Generated Files
@@ -45,6 +82,8 @@ __pycache__/
 data/
 runtime/
 .worktrees/
+frontend/dist/
+frontend/node_modules/
 ```
 
 ## Test Layout

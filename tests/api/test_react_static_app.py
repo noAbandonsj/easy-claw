@@ -54,3 +54,17 @@ def test_react_app_route_returns_404_when_dist_missing(tmp_path, monkeypatch):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "React web UI has not been built"
+
+
+def test_root_serves_react_app_after_cutover(tmp_path, monkeypatch):
+    dist = tmp_path / "frontend" / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text('<div id="root"></div>', encoding="utf-8")
+    monkeypatch.setattr("easy_claw.api.app._react_dist_dir", lambda: dist)
+
+    client = TestClient(create_app(_config(tmp_path)))
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'id="root"' in response.text

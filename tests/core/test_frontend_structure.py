@@ -43,7 +43,7 @@ def test_frontend_package_defines_expected_scripts_and_dependencies() -> None:
     }
 
     dependencies = package_json["dependencies"]
-    assert set(dependencies) == {"react", "react-dom"}
+    assert set(dependencies) == {"react", "react-dom", "react-markdown", "remark-gfm"}
 
     dev_dependencies = package_json["devDependencies"]
     for name in [

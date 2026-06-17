@@ -21,11 +21,16 @@ from easy_claw.storage.db import initialize_product_db
 from easy_claw.storage.repositories import SessionRepository
 from easy_claw.tools.browser import _check_playwright_browsers
 
-_STATIC_DIR = Path(__file__).resolve().parent / "static"
-
 
 def _react_dist_dir() -> Path:
     return Path(__file__).resolve().parents[3] / "frontend" / "dist"
+
+
+def _react_index_response() -> FileResponse:
+    index_path = _react_dist_dir() / "index.html"
+    if not index_path.exists():
+        raise HTTPException(status_code=404, detail="React web UI has not been built")
+    return FileResponse(index_path)
 
 
 def _session_to_dict(session: object) -> dict[str, str | None]:
@@ -71,7 +76,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     @app.get("/")
     def root() -> FileResponse:
-        return FileResponse(_STATIC_DIR / "index.html")
+        return _react_index_response()
 
     react_dist = _react_dist_dir()
     react_assets = react_dist / "assets"
@@ -85,10 +90,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     @app.get("/app")
     @app.get("/app/{path:path}")
     def react_app(path: str = "") -> FileResponse:
-        index_path = _react_dist_dir() / "index.html"
-        if not index_path.exists():
-            raise HTTPException(status_code=404, detail="React web UI has not been built")
-        return FileResponse(index_path)
+        return _react_index_response()
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -278,7 +280,6 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         finally:
             agent_session.close()
 
-    app.mount("/static", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
     return app
 
 

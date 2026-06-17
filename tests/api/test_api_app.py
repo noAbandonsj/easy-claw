@@ -76,39 +76,6 @@ def test_runs_endpoint_is_removed():
     assert response.status_code == 404
 
 
-def test_web_ui_uses_split_static_assets(tmp_path):
-    client = TestClient(create_app(_test_config(tmp_path)))
-
-    html = client.get("/").text
-
-    assert '<link rel="stylesheet" href="/static/style.css">' in html
-    assert '<script type="module" src="/static/js/main.js"></script>' in html
-    assert "<style>" not in html
-    assert "<script>" not in html
-
-    css = client.get("/static/style.css")
-    main_js = client.get("/static/js/main.js")
-    socket_js = client.get("/static/js/socket.js")
-    markdown_js = client.get("/static/js/markdown.js")
-    tools_js = client.get("/static/js/tools.js")
-    assert css.status_code == 200
-    assert "--bg-deep" in css.text
-    assert ".tool-panel .tool-summary" in css.text
-    assert ".tool-panel .tool-action" in css.text
-    assert "@media (max-width: 640px)" in css.text
-    assert main_js.status_code == 200
-    assert socket_js.status_code == 200
-    assert markdown_js.status_code == 200
-    assert tools_js.status_code == 200
-    assert "connectChat" in socket_js.text
-    assert "function describeTool" in tools_js.text
-    assert "function markdownToBlocks" in markdown_js.text
-    assert "label + '失败：无法写入剪贴板'" in tools_js.text
-    for payload in (main_js.text, socket_js.text, markdown_js.text, tools_js.text):
-        assert "innerHTML" not in payload
-        assert "onclick=" not in payload
-
-
 def test_uvicorn_websocket_protocol_dependency_is_importable():
     from uvicorn.protocols.websockets.auto import AutoWebSocketsProtocol
 

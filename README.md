@@ -15,6 +15,7 @@ easy-claw 是一个 Windows 优先的本地 AI 助手。你可以在终端里用
 - Python 3.11 或更高版本
 - Git
 - [uv](https://docs.astral.sh/uv/)
+- Node.js 20 或更高版本（仅开发或从源码运行 Web 页面时需要）
 
 进入项目目录：
 
@@ -132,6 +133,15 @@ uv run easy-claw doctor
 
 普通聊天不需要启动 API 服务。只有开发 Web 界面或做外部集成时才需要：
 
+如果你从源码运行 Web 页面，先构建 React 前端：
+
+```powershell
+Push-Location frontend
+npm install
+npm run build
+Pop-Location
+```
+
 ```powershell
 .\scripts\start.ps1 -ApiServer
 ```
@@ -147,6 +157,15 @@ uv run easy-claw doctor
 
 注意：`/docs` 是接口文档，不是聊天界面。聊天页面在根路径 `/`，底层通过 `/ws/chat` 建立 WebSocket 连接。
 Web 聊天页的 `/help` 使用和 CLI 相同的 slash command 定义，并支持查看 `/skills`、`/mcp`、`/browser`、`/sessions`，以及用 `/resume <session-id>` 按前缀恢复会话。
+
+开发 Web 前端时可以同时启动后端和 Vite：
+
+```powershell
+uv run easy-claw serve
+Push-Location frontend
+npm run dev
+Pop-Location
+```
 
 ---
 
@@ -311,6 +330,9 @@ easy-claw/
   AGENTS.md
   .env.example
   mcp_servers.json.example
+  frontend/
+    package.json
+    src/
   docs/
     architecture.md
     mvp-first-version-thinking.md
@@ -360,6 +382,12 @@ easy-claw/
 
 ```powershell
 uv sync
+Push-Location frontend
+npm install
+npm run test:run
+npm run lint
+npm run build
+Pop-Location
 uv run pytest
 uv run ruff check .
 uv run ruff format .
