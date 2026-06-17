@@ -149,7 +149,7 @@ export function App() {
         />
       }
     >
-      <ChatView blocks={chat.blocks} />
+      <ChatView blocks={chat.blocks} onApprovalDecision={chat.sendApprovalDecision} />
       <ChatInput
         disabled={chat.readyState !== 'open'}
         onSubmit={content => void handleSlashCommand(content)}

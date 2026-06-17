@@ -28,6 +28,10 @@ def event_to_dict(event: StreamEvent) -> dict[str, object]:
         msg["tool_result"] = event.tool_result
     if event.usage:
         msg["usage"] = event.usage
+    if event.approval_id:
+        msg["approval_id"] = event.approval_id
+    if event.approval_actions is not None:
+        msg["approval_actions"] = event.approval_actions
     return msg
 
 

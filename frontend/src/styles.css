@@ -199,6 +199,50 @@ h1 {
   background: rgba(15, 18, 20, 0.72);
 }
 
+.approval-card {
+  display: grid;
+  gap: 12px;
+  border-color: rgba(248, 211, 106, 0.42);
+}
+
+.approval-card h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.approval-action {
+  display: grid;
+  gap: 8px;
+}
+
+.approval-action pre {
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.24);
+}
+
+.approval-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.approval-actions button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(248, 211, 106, 0.45);
+  border-radius: 8px;
+  color: #f4f1e8;
+  background: rgba(248, 211, 106, 0.1);
+  cursor: pointer;
+}
+
+.approval-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .tool-summary {
   display: flex;
   align-items: center;

@@ -6,8 +6,8 @@ from fastapi.testclient import TestClient
 
 from easy_claw.agent.streaming import StreamEvent
 from easy_claw.api.app import create_app
-from easy_claw.api.websocket import parse_client_message
 from easy_claw.api.websocket import next_stream_event_or_none as _next_stream_event_or_none
+from easy_claw.api.websocket import parse_client_message
 from easy_claw.cli.slash import get_slash_command_specs
 from easy_claw.config import AppConfig
 from easy_claw.skills import SkillSource

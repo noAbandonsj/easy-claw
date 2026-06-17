@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from queue import Empty, Queue
 from typing import Protocol
+from uuid import uuid4
 
 
 class ApprovalReviewer(Protocol):
@@ -24,6 +27,59 @@ class StaticApprovalReviewer:
                 else:
                     decisions.append({"type": "reject", "message": "用户已拒绝。"})
         return decisions
+
+
+@dataclass(frozen=True)
+class WebApprovalRequest:
+    approval_id: str
+    actions: list[object]
+
+
+class WebApprovalReviewer:
+    def __init__(self) -> None:
+        self._action_count = 1
+        self._approval_id: str | None = None
+        self._decisions: Queue[list[dict[str, object]]] = Queue(maxsize=1)
+
+    def prepare(self, interrupts: Sequence[object]) -> WebApprovalRequest:
+        actions: list[object] = []
+        for interrupt in interrupts:
+            actions.extend(_get_action_requests(_interrupt_value(interrupt)) or [{}])
+        self._approval_id = f"approval-{uuid4().hex}"
+        self._action_count = max(1, len(actions))
+        self._decisions = Queue(maxsize=1)
+        return WebApprovalRequest(
+            approval_id=self._approval_id,
+            actions=actions or [{}],
+        )
+
+    def submit(
+        self,
+        approval_id: str,
+        *,
+        approve: bool,
+        message: str | None = None,
+    ) -> None:
+        if approval_id != self._approval_id:
+            raise ValueError("审批 ID 不匹配。")
+        if approve:
+            decisions = [{"type": "approve"} for _ in range(self._action_count)]
+        else:
+            decisions = [
+                {"type": "reject", "message": message or "用户已拒绝。"}
+                for _ in range(self._action_count)
+            ]
+        self._decisions.put(decisions)
+
+    def review(self, interrupts: Sequence[object]) -> list[dict[str, object]]:
+        try:
+            return self._decisions.get(timeout=300)
+        except Empty:
+            action_count = max(1, len(interrupts))
+            return [
+                {"type": "reject", "message": "审批超时，已拒绝。"}
+                for _ in range(action_count)
+            ]
 
 
 class ConsoleApprovalReviewer:

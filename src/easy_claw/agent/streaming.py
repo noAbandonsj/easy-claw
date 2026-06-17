@@ -18,6 +18,8 @@ class StreamEvent:
     tool_result: object | None = None
     thread_id: str | None = None
     usage: dict[str, int] | None = None
+    approval_id: str | None = None
+    approval_actions: object | None = None
 
 
 def _extract_last_message_info(result: object) -> tuple[str, dict[str, int] | None]:
@@ -93,7 +95,14 @@ def _stream_with_approval(
                     if cancel_pause_event is not None:
                         cancel_pause_event.set()
                     try:
-                        yield StreamEvent(type="approval_required", thread_id=thread_id)
+                        prepare = getattr(reviewer, "prepare", None)
+                        request = prepare(interrupts) if callable(prepare) else None
+                        yield StreamEvent(
+                            type="approval_required",
+                            thread_id=thread_id,
+                            approval_id=getattr(request, "approval_id", None),
+                            approval_actions=getattr(request, "actions", None),
+                        )
                         decisions = reviewer.review(interrupts)
                     finally:
                         if cancel_pause_event is not None:

@@ -1,8 +1,15 @@
 import type { MessageBlock } from '../api/types';
+import { ApprovalCard } from './ApprovalCard';
 import { MarkdownMessage } from './MarkdownMessage';
 import { ToolCard } from './ToolCard';
 
-export function MessageBlockView({ block }: { block: MessageBlock }) {
+export function MessageBlockView({
+  block,
+  onApprovalDecision,
+}: {
+  block: MessageBlock;
+  onApprovalDecision?: (approvalId: string, decision: 'approve' | 'reject') => void;
+}) {
   if (block.kind === 'user') {
     return (
       <article className="message user-message">
@@ -22,10 +29,10 @@ export function MessageBlockView({ block }: { block: MessageBlock }) {
 
   if (block.kind === 'approval') {
     return (
-      <article className={`approval-card ${block.status}`}>
-        <h2>工具执行需要确认</h2>
-        <p>{block.status === 'pending' ? '等待处理' : block.status}</p>
-      </article>
+      <ApprovalCard
+        block={block}
+        onDecision={onApprovalDecision || (() => undefined)}
+      />
     );
   }
 

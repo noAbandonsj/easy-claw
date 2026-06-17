@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from easy_claw.agent.approvals import StaticApprovalReviewer
+from easy_claw.agent.approvals import WebApprovalReviewer
 from easy_claw.agent.langchain_runtime import AgentRequest, LangChainAgentRuntime
 from easy_claw.api.schemas import CreateSessionRequest
 from easy_claw.api.websocket import event_to_dict as _event_to_dict
@@ -200,7 +200,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             app_root=config.cwd,
             workspace_root=config.default_workspace,
         )
-        runtime = LangChainAgentRuntime(reviewer=StaticApprovalReviewer(approve=True))
+        reviewer = WebApprovalReviewer()
+        runtime = LangChainAgentRuntime(reviewer=reviewer)
 
         await websocket.send_json(
             {
@@ -244,6 +245,34 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                     if event is None:
                         break
                     await websocket.send_json(_event_to_dict(event))
+                    if event.type == "approval_required":
+                        while True:
+                            decision_raw = await websocket.receive_text()
+                            decision = _parse_client_message(decision_raw)
+                            if decision.get("type") != "approval_decision":
+                                await websocket.send_json(
+                                    {
+                                        "type": "error",
+                                        "content": "请先处理当前审批请求。",
+                                    }
+                                )
+                                continue
+                            try:
+                                reviewer.submit(
+                                    str(decision.get("approval_id") or ""),
+                                    approve=bool(decision.get("approve")),
+                                    message=(
+                                        str(decision.get("message"))
+                                        if decision.get("message")
+                                        else None
+                                    ),
+                                )
+                            except ValueError as exc:
+                                await websocket.send_json(
+                                    {"type": "error", "content": str(exc)}
+                                )
+                                continue
+                            break
         except WebSocketDisconnect:
             pass
         finally:
