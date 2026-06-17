@@ -151,6 +151,22 @@ export function useChatSocket(sessionId: string | null) {
     [sessionId],
   );
 
+  const clearBlocks = useCallback(() => {
+    if (!sessionId) {
+      return;
+    }
+    setBlockSnapshot({
+      blocks: [],
+      sessionId,
+    });
+    setConnectionSnapshot(current => ({
+      banner: current.sessionId === sessionId ? current.banner : null,
+      readyState: current.sessionId === sessionId ? current.readyState : 'idle',
+      sessionId,
+      status: '已清空',
+    }));
+  }, [sessionId]);
+
   const connection =
     connectionSnapshot.sessionId === sessionId
       ? connectionSnapshot
@@ -164,6 +180,7 @@ export function useChatSocket(sessionId: string | null) {
   return {
     banner: connection.banner,
     blocks: blockSnapshot.sessionId === sessionId ? blockSnapshot.blocks : [],
+    clearBlocks,
     readyState: connection.readyState,
     sendApprovalDecision,
     sendPrompt,
