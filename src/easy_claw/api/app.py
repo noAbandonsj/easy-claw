@@ -23,6 +23,10 @@ from easy_claw.tools.browser import _check_playwright_browsers
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
+def _react_dist_dir() -> Path:
+    return Path(__file__).resolve().parents[3] / "frontend" / "dist"
+
+
 def _session_to_dict(session: object) -> dict[str, str | None]:
     return session.__dict__
 
@@ -67,6 +71,23 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     @app.get("/")
     def root() -> FileResponse:
         return FileResponse(_STATIC_DIR / "index.html")
+
+    react_dist = _react_dist_dir()
+    react_assets = react_dist / "assets"
+    if react_assets.exists():
+        app.mount(
+            "/app/assets",
+            StaticFiles(directory=react_assets),
+            name="react-assets",
+        )
+
+    @app.get("/app")
+    @app.get("/app/{path:path}")
+    def react_app(path: str = "") -> FileResponse:
+        index_path = _react_dist_dir() / "index.html"
+        if not index_path.exists():
+            raise HTTPException(status_code=404, detail="React web UI has not been built")
+        return FileResponse(index_path)
 
     @app.get("/health")
     def health() -> dict[str, str]:
