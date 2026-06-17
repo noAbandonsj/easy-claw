@@ -13,4 +13,15 @@ describe('ChatInput', () => {
     expect(onSubmit).toHaveBeenCalledWith('总结 README');
     expect(screen.getByLabelText('消息')).toHaveValue('');
   });
+
+  it('submits with Enter and clears the field', () => {
+    const onSubmit = vi.fn();
+    render(<ChatInput disabled={false} onSubmit={onSubmit} />);
+
+    fireEvent.change(screen.getByLabelText('消息'), { target: { value: '/status' } });
+    fireEvent.keyDown(screen.getByLabelText('消息'), { key: 'Enter' });
+
+    expect(onSubmit).toHaveBeenCalledWith('/status');
+    expect(screen.getByLabelText('消息')).toHaveValue('');
+  });
 });
