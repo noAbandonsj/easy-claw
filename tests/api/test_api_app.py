@@ -277,6 +277,28 @@ def test_websocket_chat_uses_structured_prompt_content(tmp_path, monkeypatch):
     assert captured_prompts == ["结构化消息"]
 
 
+def test_websocket_chat_reports_runtime_setup_error(tmp_path, monkeypatch):
+    class FakeRuntime:
+        def __init__(self, reviewer):
+            self.reviewer = reviewer
+
+        def open_session(self, request):
+            raise RuntimeError("运行聊天前请先设置 EASY_CLAW_MODEL。")
+
+    monkeypatch.setattr("easy_claw.api.app.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.api.app.resolve_skill_sources", lambda **kwargs: [])
+    client = TestClient(create_app(_test_config(tmp_path)))
+
+    with client.websocket_connect("/ws/chat") as websocket:
+        websocket.receive_json()
+        error = websocket.receive_json()
+
+    assert error == {
+        "type": "error",
+        "content": "运行聊天前请先设置 EASY_CLAW_MODEL。",
+    }
+
+
 def test_next_stream_event_or_none_returns_event_from_executor():
     event = StreamEvent(type="done", content="ok")
 

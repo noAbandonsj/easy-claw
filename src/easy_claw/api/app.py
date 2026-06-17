@@ -215,14 +215,18 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             }
         )
 
-        agent_session = runtime.open_session(
-            AgentRequest(
-                prompt="",
-                thread_id=session.id,
-                config=config,
-                skill_source_records=skill_source_records,
+        try:
+            agent_session = runtime.open_session(
+                AgentRequest(
+                    prompt="",
+                    thread_id=session.id,
+                    config=config,
+                    skill_source_records=skill_source_records,
+                )
             )
-        )
+        except RuntimeError as exc:
+            await websocket.send_json({"type": "error", "content": str(exc)})
+            return
 
         try:
             while True:
