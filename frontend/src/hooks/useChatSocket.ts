@@ -22,7 +22,21 @@ type ConnectionSnapshot = {
   status: string;
 };
 
-export function useChatSocket(sessionId: string | null) {
+function withLocalToolTiming(payload: StreamEvent): StreamEvent {
+  if (payload.type === 'tool_call_start') {
+    return { ...payload, startedAt: Date.now() };
+  }
+  if (payload.type === 'tool_call_result') {
+    return { ...payload, finishedAt: Date.now() };
+  }
+  return payload;
+}
+
+export function useChatSocket(
+  sessionId: string | null,
+  overrides: { model?: string | null; workspacePath?: string | null } = {},
+) {
+  const { model, workspacePath } = overrides;
   const socketRef = useRef<WebSocket | null>(null);
   const [blockSnapshot, setBlockSnapshot] = useState<BlockSnapshot>({
     blocks: [],
@@ -40,7 +54,9 @@ export function useChatSocket(sessionId: string | null) {
       return;
     }
 
-    const socket = new WebSocket(buildChatSocketUrl(sessionId));
+    const socket = new WebSocket(
+      buildChatSocketUrl(sessionId, undefined, { model, workspacePath }),
+    );
     socketRef.current = socket;
 
     socket.onopen = () => {
@@ -59,6 +75,7 @@ export function useChatSocket(sessionId: string | null) {
       } catch {
         payload = { type: 'error', content: '无法解析服务端消息' };
       }
+      payload = withLocalToolTiming(payload);
 
       if (payload.type === 'banner') {
         setConnectionSnapshot({
@@ -101,7 +118,7 @@ export function useChatSocket(sessionId: string | null) {
       }
       socket.close();
     };
-  }, [sessionId]);
+  }, [model, sessionId, workspacePath]);
 
   const sendPrompt = useCallback((content: string) => {
     const trimmed = content.trim();

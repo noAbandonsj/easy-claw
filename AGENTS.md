@@ -110,16 +110,16 @@ CLI:
 
 API/Web:
 
-- `api/app.py` creates the FastAPI app, serves the React production build from `frontend/dist/` at `/` and `/app`, exposes health/capability/session endpoints, and owns `/ws/chat`.
+- `api/app.py` creates the FastAPI app, serves the React production build from `frontend/dist/` at `/` and `/app`, exposes health/capability/session/doctor/workspace/conversation-export endpoints, and owns `/ws/chat`. WebSocket connections may carry per-browser-session `workspace_path` and `model` query overrides; these do not write `.env`.
 - `api/websocket.py` parses structured client messages, converts stream events to JSON, and bridges blocking stream iteration into async WebSocket flow.
 - `api/schemas.py` contains Pydantic request models.
 
 Frontend:
 
 - `frontend/` is a React + TypeScript + Vite app. Build it with `npm run build` before serving the source checkout as a Web app.
-- `frontend/src/api/` contains REST and WebSocket client helpers for `/ws/chat`, `/slash-commands`, `/sessions`, `/skills`, `/mcp`, and `/browser`.
+- `frontend/src/api/` contains REST and WebSocket client helpers for `/ws/chat`, `/slash-commands`, `/sessions`, `/skills`, `/mcp`, `/browser`, `/doctor`, `/workspace/resolve`, and `/conversation/save`.
 - `frontend/src/state/` contains pure reducers for `MessageBlock[]`, status mapping, and slash-command parsing.
-- `frontend/src/components/` contains the React shell, session list, chat input, message blocks, tool cards, Markdown/code rendering, capability dialogs, and approval cards.
+- `frontend/src/components/` contains the React shell, session list with deletion controls, chat input, message blocks, tool cards, Markdown/code rendering, capability dialogs, and approval cards.
 
 Tools:
 
@@ -214,7 +214,7 @@ When changing:
 
 - startup scripts: update `tests/core/test_scripts.py`;
 - config parsing: update `tests/core/test_config.py` and `.env.example`;
-- CLI slash commands: update `src/easy_claw/cli/slash.py`, README/docs, and CLI/API tests if Web depends on command specs;
+- CLI slash commands: update `src/easy_claw/cli/slash.py`, README/docs, frontend slash parsing, and CLI/API/frontend tests if Web depends on command specs;
 - streaming events: update `tests/agent/test_runtime.py`, CLI rendering tests, and API WebSocket tests as needed;
 - React Web UI behavior: update `frontend/src` tests, run `npm run test:run`, `npm run lint`, and `npm run build`, and update API tests when the WebSocket or REST contract changes;
 - MCP behavior: update `tests/tools/test_mcp.py` and keep `mcp_servers.json.example` aligned;

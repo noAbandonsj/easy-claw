@@ -3,11 +3,18 @@ import type { ClientMessage } from './types';
 export function buildChatSocketUrl(
   sessionId?: string | null,
   baseUrl: URL = new URL(window.location.href),
+  overrides: { model?: string | null; workspacePath?: string | null } = {},
 ): string {
   const protocol = baseUrl.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = new URL('/ws/chat', `${protocol}//${baseUrl.host}`);
   if (sessionId) {
     url.searchParams.set('session_id', sessionId);
+  }
+  if (overrides.workspacePath) {
+    url.searchParams.set('workspace_path', overrides.workspacePath);
+  }
+  if (overrides.model) {
+    url.searchParams.set('model', overrides.model);
   }
   return url.toString();
 }

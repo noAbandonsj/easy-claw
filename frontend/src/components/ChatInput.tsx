@@ -37,7 +37,7 @@ export function ChatInput({
         disabled={disabled}
         onChange={event => setValue(event.target.value)}
         onKeyDown={submitOnEnter}
-        placeholder="输入消息，或使用 /skills、/mcp、/browser"
+        placeholder="输入消息，或使用 /skills、/mcp、/doctor"
         value={value}
       />
       <button disabled={disabled || !value.trim()} type="submit">

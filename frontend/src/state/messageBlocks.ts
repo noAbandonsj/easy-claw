@@ -74,9 +74,10 @@ export function reduceStreamEvent(blocks: MessageBlock[], event: StreamEvent): M
           id: nextBlockId(blocks, 'tool'),
           kind: 'tool',
           name: event.tool_name || 'unknown_tool',
-          args: event.tool_args ?? {},
+          args: event.tool_args,
           result: undefined,
           status: 'running',
+          ...(event.startedAt !== undefined ? { startedAt: event.startedAt } : {}),
         },
       ];
     case 'tool_call_result': {
@@ -99,9 +100,10 @@ export function reduceStreamEvent(blocks: MessageBlock[], event: StreamEvent): M
             id: nextBlockId(blocks, 'tool'),
             kind: 'tool',
             name: event.tool_name || 'unknown_tool',
-            args: {},
+            args: undefined,
             result: event.tool_result ?? event.content ?? '',
             status: 'finished',
+            ...(event.finishedAt !== undefined ? { finishedAt: event.finishedAt } : {}),
           },
         ];
       }
@@ -111,6 +113,7 @@ export function reduceStreamEvent(blocks: MessageBlock[], event: StreamEvent): M
               ...block,
               result: event.tool_result ?? event.content ?? '',
               status: 'finished',
+              ...(event.finishedAt !== undefined ? { finishedAt: event.finishedAt } : {}),
             }
           : block,
       );

@@ -69,4 +69,41 @@ describe('useChatSocket', () => {
       { id: 'assistant-1', kind: 'assistant', content: '收到', streaming: false },
     ]);
   });
+
+  it('adds local timing metadata to streamed tool blocks', async () => {
+    vi.stubGlobal('WebSocket', MockWebSocket);
+    vi.spyOn(Date, 'now').mockReturnValueOnce(1000).mockReturnValueOnce(2450);
+
+    const { result } = renderHook(() => useChatSocket('session-1'));
+
+    await waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
+    const socket = MockWebSocket.instances[0];
+
+    act(() => socket.open());
+    act(() => {
+      socket.receive({
+        type: 'tool_call_start',
+        tool_name: 'read_file',
+        tool_args: { path: 'README.md' },
+      });
+      socket.receive({
+        type: 'tool_call_result',
+        tool_name: 'read_file',
+        tool_result: '# easy-claw',
+      });
+    });
+
+    expect(result.current.blocks).toEqual([
+      {
+        id: 'tool-1',
+        kind: 'tool',
+        name: 'read_file',
+        args: { path: 'README.md' },
+        result: '# easy-claw',
+        status: 'finished',
+        startedAt: 1000,
+        finishedAt: 2450,
+      },
+    ]);
+  });
 });

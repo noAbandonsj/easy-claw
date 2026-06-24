@@ -35,6 +35,8 @@ uv run easy-claw
 /delete-session <session-id> --force
 ```
 
+Web 聊天页复用同一份 slash command 定义，支持查看能力、恢复/删除会话、切换当前浏览器会话的工作区和模型、运行 `/doctor` 诊断，以及用 `/save <path>` 导出当前可见对话。Web 端的 `/workspace` 和 `/model` 只影响当前浏览器会话，不会修改 `.env` 或系统环境变量。
+
 ## 推荐流程
 
 常规聊天：

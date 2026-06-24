@@ -141,6 +141,97 @@ def test_web_capability_endpoints_return_structured_data(tmp_path, monkeypatch):
     assert resolved["id"] == "abcdef123456"
 
 
+def test_doctor_endpoint_returns_web_safe_config(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "easy_claw.api.app._check_playwright_browsers",
+        lambda *, headless: not headless,
+    )
+    client = TestClient(create_app(_test_config(tmp_path)))
+
+    response = client.get("/doctor")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["model"] == "deepseek-v4-pro"
+    assert payload["workspace"] == str(tmp_path)
+    assert payload["api_key_configured"] is True
+    assert "sk-test" not in json.dumps(payload)
+    assert payload["browser"]["chromium_installed"] is True
+    assert payload["browser"]["chromium_headless_installed"] is False
+
+
+def test_save_conversation_endpoint_writes_markdown(tmp_path):
+    client = TestClient(create_app(_test_config(tmp_path)))
+    save_path = tmp_path / "exports" / "chat.md"
+
+    response = client.post(
+        "/conversation/save",
+        json={
+            "path": str(save_path),
+            "session_id": "session-1",
+            "workspace_path": str(tmp_path),
+            "model": "deepseek-v4-pro",
+            "messages": [
+                {"kind": "user", "content": "你好"},
+                {"kind": "assistant", "content": "你好，我能帮你。"},
+                {"kind": "tool", "name": "run_command", "result": "ok"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["path"] == str(save_path)
+    exported = save_path.read_text(encoding="utf-8")
+    assert "# easy-claw 对话记录" in exported
+    assert "**用户：**" in exported
+    assert "你好，我能帮你。" in exported
+    assert "run_command" not in exported
+
+
+def test_resolve_workspace_endpoint_validates_directory(tmp_path):
+    client = TestClient(create_app(_test_config(tmp_path)))
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    response = client.post("/workspace/resolve", json={"path": str(workspace)})
+    missing = client.post("/workspace/resolve", json={"path": str(tmp_path / "missing")})
+
+    assert response.status_code == 200
+    assert response.json()["workspace_path"] == str(workspace)
+    assert missing.status_code == 400
+    assert missing.json()["detail"] == "不是目录"
+
+
+def test_delete_session_endpoint_removes_session_and_checkpoint(tmp_path, monkeypatch):
+    config = _test_config(tmp_path)
+    from easy_claw.storage.db import initialize_product_db
+    from easy_claw.storage.repositories import SessionRepository
+
+    initialize_product_db(config.product_db_path)
+    repo = SessionRepository(config.product_db_path)
+    session = repo.create_session(
+        workspace_path=str(tmp_path),
+        model="deepseek-v4-pro",
+        title="待删除",
+    )
+    deleted_threads = []
+    monkeypatch.setattr(
+        "easy_claw.api.app._delete_checkpoint_thread",
+        lambda thread_id, checkpoint_db_path: deleted_threads.append(
+            (thread_id, checkpoint_db_path)
+        ),
+    )
+    client = TestClient(create_app(config))
+
+    response = client.delete(f"/sessions/{session.id[:8]}")
+
+    assert response.status_code == 200
+    assert response.json()["deleted"] is True
+    assert response.json()["session"]["id"] == session.id
+    assert repo.get_session(session.id) is None
+    assert deleted_threads == [(session.id, config.checkpoint_db_path)]
+
+
 def test_websocket_chat_passes_resolved_skill_source_records(tmp_path, monkeypatch):
     source_root = tmp_path / ".easy-claw" / "skills"
     source_root.mkdir(parents=True)
@@ -236,6 +327,42 @@ def test_websocket_chat_can_resume_existing_session_by_prefix(tmp_path, monkeypa
 
     assert banner["session_id"] == "resume12"
     assert captured_requests[0].thread_id == record.id
+
+
+def test_websocket_chat_uses_web_workspace_and_model_overrides(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    captured_requests = []
+
+    class FakeSession:
+        def stream(self, text):
+            yield StreamEvent(type="done", content="", thread_id="thread-1")
+
+        def close(self):
+            pass
+
+    class FakeRuntime:
+        def __init__(self, reviewer):
+            self.reviewer = reviewer
+
+        def open_session(self, request):
+            captured_requests.append(request)
+            return FakeSession()
+
+    monkeypatch.setattr("easy_claw.api.app.LangChainAgentRuntime", FakeRuntime)
+    monkeypatch.setattr("easy_claw.api.app.resolve_skill_sources", lambda **kwargs: [])
+    client = TestClient(create_app(_test_config(tmp_path)))
+
+    with client.websocket_connect(
+        f"/ws/chat?workspace_path={workspace}&model=web-model"
+    ) as websocket:
+        banner = websocket.receive_json()
+        websocket.close()
+
+    assert banner["workspace"] == str(workspace)
+    assert banner["model"] == "web-model"
+    assert captured_requests[0].config.default_workspace == workspace
+    assert captured_requests[0].config.model == "web-model"
 
 
 def test_parse_client_message_accepts_structured_prompt():

@@ -78,6 +78,7 @@ h1 {
 
 .new-session-button,
 .session-button,
+.delete-session-button,
 .composer button {
   border: 1px solid rgba(110, 231, 216, 0.35);
   border-radius: 8px;
@@ -98,6 +99,13 @@ h1 {
   overflow: auto;
 }
 
+.session-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: 8px;
+  align-items: stretch;
+}
+
 .session-button {
   display: grid;
   gap: 4px;
@@ -111,6 +119,21 @@ h1 {
 .session-button[aria-current="true"] {
   border-color: rgba(248, 211, 106, 0.7);
   background: rgba(248, 211, 106, 0.12);
+}
+
+.delete-session-button {
+  width: 36px;
+  min-height: 54px;
+  padding: 0;
+  color: #f8d36a;
+  background: rgba(248, 211, 106, 0.08);
+}
+
+.delete-session-button:hover,
+.delete-session-button:focus-visible {
+  border-color: rgba(248, 113, 113, 0.65);
+  color: #fecaca;
+  background: rgba(248, 113, 113, 0.12);
 }
 
 .session-button small,
@@ -261,6 +284,15 @@ h1 {
   font-size: 1rem;
 }
 
+.tool-meta,
+.tool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .tool-section {
   display: grid;
   gap: 8px;
@@ -283,6 +315,12 @@ h1 {
   color: #f4f1e8;
   background: rgba(110, 231, 216, 0.1);
   cursor: pointer;
+}
+
+.tool-argument-summary {
+  margin: 0;
+  color: #e4dfd3;
+  overflow-wrap: anywhere;
 }
 
 .tool-panel pre,

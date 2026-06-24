@@ -1,20 +1,31 @@
 import type {
   BrowserPayload,
+  DoctorPayload,
   McpPayload,
   SessionRecord,
   SkillsPayload,
   SlashCommandSpec,
 } from '../api/types';
 
-export type CapabilityKind = 'browser' | 'help' | 'mcp' | 'sessions' | 'skills' | 'status';
+export type CapabilityKind =
+  | 'browser'
+  | 'doctor'
+  | 'help'
+  | 'mcp'
+  | 'sessions'
+  | 'skills'
+  | 'status';
 
 type StatusPayload = {
   activeSessionId: string | null;
+  model?: string | null;
   status: string;
+  workspacePath?: string | null;
 };
 
 type CapabilityDialogProps =
   | { kind: 'browser'; payload: BrowserPayload }
+  | { kind: 'doctor'; payload: DoctorPayload }
   | { kind: 'help'; payload: SlashCommandSpec[] }
   | { kind: 'mcp'; payload: McpPayload }
   | { kind: 'sessions'; payload: SessionRecord[] }
@@ -95,6 +106,46 @@ export function CapabilityDialog({ kind, payload }: CapabilityDialogProps) {
     );
   }
 
+  if (kind === 'doctor') {
+    return (
+      <section className="capability-dialog">
+        <h2>本地诊断</h2>
+        <dl>
+          <dt>版本</dt>
+          <dd>{payload.version}</dd>
+          <dt>模型</dt>
+          <dd>{payload.model || '未配置'}</dd>
+          <dt>工作区</dt>
+          <dd>{payload.workspace}</dd>
+          <dt>数据目录</dt>
+          <dd>{payload.data_dir}</dd>
+          <dt>业务数据库</dt>
+          <dd>{payload.product_db_path}</dd>
+          <dt>检查点数据库</dt>
+          <dd>{payload.checkpoint_db_path}</dd>
+          <dt>模型服务</dt>
+          <dd>{payload.base_url}</dd>
+          <dt>密钥</dt>
+          <dd>{payload.api_key_configured ? '已配置' : '未配置'}</dd>
+          <dt>审批模式</dt>
+          <dd>{payload.approval_mode}</dd>
+          <dt>执行模式</dt>
+          <dd>{payload.execution_mode}</dd>
+          <dt>MCP</dt>
+          <dd>{payload.mcp_status}</dd>
+          <dt>MCP 配置</dt>
+          <dd>{payload.mcp_config_path}</dd>
+          <dt>浏览器工具</dt>
+          <dd>{yesNo(payload.browser.enabled)}</dd>
+          <dt>Chromium</dt>
+          <dd>{yesNo(payload.browser.chromium_installed)}</dd>
+          <dt>Headless Chromium</dt>
+          <dd>{yesNo(payload.browser.chromium_headless_installed)}</dd>
+        </dl>
+      </section>
+    );
+  }
+
   if (kind === 'sessions') {
     return (
       <section className="capability-dialog">
@@ -157,6 +208,10 @@ export function CapabilityDialog({ kind, payload }: CapabilityDialogProps) {
         <dd>{payload.status}</dd>
         <dt>会话</dt>
         <dd>{payload.activeSessionId || '未选择'}</dd>
+        <dt>模型</dt>
+        <dd>{payload.model || '默认配置'}</dd>
+        <dt>工作区</dt>
+        <dd>{payload.workspacePath || '默认配置'}</dd>
       </dl>
     </section>
   );

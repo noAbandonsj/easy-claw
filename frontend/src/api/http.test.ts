@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createSession, listSessions } from './http';
+import {
+  createSession,
+  deleteSession,
+  fetchDoctor,
+  listSessions,
+  resolveWorkspace,
+  saveConversation,
+} from './http';
 
 describe('http client', () => {
   afterEach(() => {
@@ -50,5 +57,77 @@ describe('http client', () => {
       method: 'POST',
     });
     expect(session.id).toBe('session-2');
+  });
+
+  it('deletes a session by id or prefix', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ deleted: true, session: { id: 'session-1' } }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await deleteSession('session-1');
+
+    expect(fetchMock).toHaveBeenCalledWith('/sessions/session-1', { method: 'DELETE' });
+    expect(result.deleted).toBe(true);
+  });
+
+  it('loads doctor details from the backend', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ model: 'deepseek-v4-pro', workspace: 'D:/workspace' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchDoctor();
+
+    expect(fetchMock).toHaveBeenCalledWith('/doctor');
+    expect(result.model).toBe('deepseek-v4-pro');
+  });
+
+  it('resolves a workspace path through the backend', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ workspace_path: 'D:/workspace' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await resolveWorkspace('D:/workspace');
+
+    expect(fetchMock).toHaveBeenCalledWith('/workspace/resolve', {
+      body: JSON.stringify({ path: 'D:/workspace' }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+    expect(result.workspace_path).toBe('D:/workspace');
+  });
+
+  it('saves visible conversation messages through the backend', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ path: 'D:/tmp/chat.md', saved: true }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await saveConversation({
+      messages: [{ kind: 'user', content: '你好' }],
+      model: 'deepseek-v4-pro',
+      path: 'D:/tmp/chat.md',
+      session_id: 'session-1',
+      workspace_path: 'D:/workspace',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/conversation/save', {
+      body: JSON.stringify({
+        messages: [{ kind: 'user', content: '你好' }],
+        model: 'deepseek-v4-pro',
+        path: 'D:/tmp/chat.md',
+        session_id: 'session-1',
+        workspace_path: 'D:/workspace',
+      }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+    expect(result.saved).toBe(true);
   });
 });

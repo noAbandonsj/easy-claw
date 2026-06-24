@@ -58,6 +58,35 @@ describe('reduceStreamEvent', () => {
     ]);
   });
 
+  it('keeps local tool timing metadata when merging tool results', () => {
+    let blocks: MessageBlock[] = [];
+    blocks = reduceStreamEvent(blocks, {
+      type: 'tool_call_start',
+      tool_name: 'read_file',
+      tool_args: { path: 'README.md' },
+      startedAt: 1000,
+    });
+    blocks = reduceStreamEvent(blocks, {
+      type: 'tool_call_result',
+      tool_name: 'read_file',
+      tool_result: '# easy-claw',
+      finishedAt: 2450,
+    });
+
+    expect(blocks).toEqual([
+      {
+        id: 'tool-1',
+        kind: 'tool',
+        name: 'read_file',
+        args: { path: 'README.md' },
+        result: '# easy-claw',
+        status: 'finished',
+        startedAt: 1000,
+        finishedAt: 2450,
+      },
+    ]);
+  });
+
   it('adds approval blocks from approval_required events', () => {
     const blocks = reduceStreamEvent([], {
       type: 'approval_required',

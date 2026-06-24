@@ -2,12 +2,14 @@ import type { SessionRecord } from '../api/types';
 
 export function Sidebar({
   activeSessionId,
+  onDeleteSession,
   onNewSession,
   onSelectSession,
   sessions,
   status,
 }: {
   activeSessionId: string | null;
+  onDeleteSession: (sessionId: string) => void;
   onNewSession: () => void;
   onSelectSession: (sessionId: string) => void;
   sessions: SessionRecord[];
@@ -27,18 +29,31 @@ export function Sidebar({
       </button>
       <nav className="session-list" aria-label="历史会话">
         {sessions.length ? (
-          sessions.map(session => (
-            <button
-              aria-current={session.id === activeSessionId ? 'true' : undefined}
-              className="session-button"
-              key={session.id}
-              onClick={() => onSelectSession(session.id)}
-              type="button"
-            >
-              <span>{session.title || '网页聊天'}</span>
-              <small>{session.id.slice(0, 8)}</small>
-            </button>
-          ))
+          sessions.map(session => {
+            const title = session.title || '网页聊天';
+            return (
+              <div className="session-row" key={session.id}>
+                <button
+                  aria-current={session.id === activeSessionId ? 'true' : undefined}
+                  className="session-button"
+                  onClick={() => onSelectSession(session.id)}
+                  type="button"
+                >
+                  <span>{title}</span>
+                  <small>{session.id.slice(0, 8)}</small>
+                </button>
+                <button
+                  aria-label={`删除会话 ${title}`}
+                  className="delete-session-button"
+                  onClick={() => onDeleteSession(session.id)}
+                  title="删除会话"
+                  type="button"
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })
         ) : (
           <p className="empty-note">暂无会话</p>
         )}

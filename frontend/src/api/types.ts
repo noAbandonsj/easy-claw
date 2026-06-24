@@ -19,12 +19,13 @@ export type StreamEvent =
       session_id?: string;
     }
   | { type: 'token'; content: string }
-  | { type: 'tool_call_start'; tool_name?: string; tool_args?: unknown }
+  | { type: 'tool_call_start'; tool_name?: string; tool_args?: unknown; startedAt?: number }
   | {
       type: 'tool_call_result';
       tool_name?: string;
       tool_result?: unknown;
       content?: string;
+      finishedAt?: number;
     }
   | {
       type: 'approval_required';
@@ -46,6 +47,15 @@ export type SessionRecord = {
   model: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type WorkspacePayload = {
+  workspace_path: string;
+};
+
+export type DeleteSessionPayload = {
+  deleted: boolean;
+  session: SessionRecord;
 };
 
 export type SkillSource = {
@@ -77,6 +87,44 @@ export type BrowserPayload = {
   chromium_headless_installed: boolean;
 };
 
+export type DoctorPayload = {
+  version: string;
+  data_dir: string;
+  product_db_path: string;
+  checkpoint_db_path: string;
+  workspace: string;
+  model: string | null;
+  base_url: string;
+  api_key_configured: boolean;
+  approval_mode: string;
+  execution_mode: string;
+  mcp_mode: string;
+  mcp_config_path: string;
+  mcp_status: string;
+  mcp_server_count: number;
+  max_model_calls: number | null;
+  max_tool_calls: number | null;
+  browser: BrowserPayload;
+};
+
+export type SaveConversationMessage = {
+  kind: 'assistant' | 'user';
+  content: string;
+};
+
+export type SaveConversationPayload = {
+  path: string;
+  session_id: string;
+  messages: SaveConversationMessage[];
+  workspace_path?: string;
+  model?: string | null;
+};
+
+export type SaveConversationResponse = {
+  saved: boolean;
+  path: string;
+};
+
 export type SlashCommandSpec = {
   name: string;
   description: string;
@@ -93,6 +141,8 @@ export type MessageBlock =
       args: unknown;
       result: unknown;
       status: 'running' | 'finished';
+      startedAt?: number;
+      finishedAt?: number;
     }
   | {
       id: string;
