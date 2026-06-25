@@ -17,8 +17,10 @@ import { AppShell } from './components/AppShell';
 import { CapabilityDialog } from './components/CapabilityDialogs';
 import { ChatInput } from './components/ChatInput';
 import { ChatView } from './components/ChatView';
+import { InspectorPanel } from './components/InspectorPanel';
 import { Modal } from './components/Modal';
 import { Sidebar } from './components/Sidebar';
+import { StatusStrip } from './components/StatusStrip';
 import { useChatSocket } from './hooks/useChatSocket';
 import { parseSlashCommand } from './state/slashCommands';
 
@@ -243,6 +245,24 @@ export function App() {
 
   return (
     <AppShell
+      topbar={
+        <StatusStrip
+          activeSession={activeSession}
+          model={webConfig.model || activeSession?.model}
+          status={loadError || chat.status}
+          workspacePath={webConfig.workspacePath || activeSession?.workspace_path}
+        />
+      }
+      inspector={
+        <InspectorPanel
+          activeSession={activeSession}
+          loadError={loadError}
+          model={webConfig.model || activeSession?.model}
+          notice={notice}
+          status={loadError || chat.status}
+          workspacePath={webConfig.workspacePath || activeSession?.workspace_path}
+        />
+      }
       sidebar={
         <Sidebar
           activeSessionId={activeSessionId}

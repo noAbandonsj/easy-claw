@@ -1,4 +1,3 @@
-import type { SessionRecord } from '../api/types';
 import type { StatusStripProps } from './StatusStrip';
 
 export type InspectorPanelProps = StatusStripProps & {

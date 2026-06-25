@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 
@@ -38,7 +38,7 @@ describe('App', () => {
     vi.unstubAllGlobals();
   });
 
-  it('loads sessions into the React chat shell', async () => {
+  it('loads sessions into the runbook cockpit shell', async () => {
     vi.stubGlobal('WebSocket', MockWebSocket);
     vi.stubGlobal(
       'fetch',
@@ -61,6 +61,9 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: 'Easy Claw' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /^网页聊天/ })).toBeInTheDocument();
+    expect(screen.getByLabelText('运行上下文')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: '运行检查器' })).toBeInTheDocument();
+    expect(within(screen.getByLabelText('运行上下文')).getByText('D:/workspace')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByLabelText('消息')).not.toBeDisabled());
   });
 
@@ -123,7 +126,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '发送' }));
 
     expect(await screen.findByRole('heading', { name: '本地诊断' })).toBeInTheDocument();
-    expect(screen.getByText('deepseek-v4-pro')).toBeInTheDocument();
+    expect(screen.getAllByText('deepseek-v4-pro').length).toBeGreaterThan(0);
   });
 
   it('deletes a session from the sidebar', async () => {
