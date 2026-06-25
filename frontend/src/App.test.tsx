@@ -123,7 +123,7 @@ describe('App', () => {
     const input = await screen.findByLabelText('消息');
     await waitFor(() => expect(input).not.toBeDisabled());
     fireEvent.change(input, { target: { value: '/doctor' } });
-    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+    fireEvent.click(screen.getByRole('button', { name: '执行' }));
 
     expect(await screen.findByRole('heading', { name: '本地诊断' })).toBeInTheDocument();
     expect(screen.getAllByText('deepseek-v4-pro').length).toBeGreaterThan(0);

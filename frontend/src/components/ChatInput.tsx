@@ -31,18 +31,26 @@ export function ChatInput({
   }
 
   return (
-    <form className="composer" onSubmit={submit}>
-      <input
-        aria-label="消息"
-        disabled={disabled}
-        onChange={event => setValue(event.target.value)}
-        onKeyDown={submitOnEnter}
-        placeholder="输入消息，或使用 /skills、/mcp、/doctor"
-        value={value}
-      />
-      <button disabled={disabled || !value.trim()} type="submit">
-        发送
-      </button>
+    <form className="composer command-dock" onSubmit={submit}>
+      <div className="command-dock-meta">
+        <span>自然语言任务或 slash command</span>
+        <span>/doctor</span>
+        <span>/mcp</span>
+        <span>/skills</span>
+      </div>
+      <div className="command-dock-row">
+        <input
+          aria-label="消息"
+          disabled={disabled}
+          onChange={event => setValue(event.target.value)}
+          onKeyDown={submitOnEnter}
+          placeholder="描述任务，或输入 /doctor、/mcp、/skills"
+          value={value}
+        />
+        <button disabled={disabled || !value.trim()} type="submit">
+          执行
+        </button>
+      </div>
     </form>
   );
 }
