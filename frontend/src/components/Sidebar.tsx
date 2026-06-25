@@ -16,18 +16,19 @@ export function Sidebar({
   status: string;
 }) {
   return (
-    <aside className="sidebar" aria-label="会话列表">
+    <aside className="sidebar" aria-label="任务记录">
       <div className="sidebar-header">
-        <p className="eyebrow">Local Agent</p>
+        <p className="eyebrow">Local Agent Runbook</p>
         <h1>Easy Claw</h1>
         <div className="status-pill" aria-label="连接状态">
+          <span className="status-dot" aria-hidden="true" />
           {status}
         </div>
       </div>
       <button className="new-session-button" onClick={onNewSession} type="button">
-        新建会话
+        新建任务
       </button>
-      <nav className="session-list" aria-label="历史会话">
+      <nav className="session-list" aria-label="历史任务">
         {sessions.length ? (
           sessions.map(session => {
             const title = session.title || '网页聊天';
@@ -55,7 +56,7 @@ export function Sidebar({
             );
           })
         ) : (
-          <p className="empty-note">暂无会话</p>
+          <p className="empty-note">暂无任务记录</p>
         )}
       </nav>
     </aside>
