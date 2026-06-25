@@ -14,16 +14,28 @@
   --color-command: #a78bfa;
   --color-bg-rgb: 8, 11, 15;
   --color-panel-rgb: 16, 22, 29;
+  --color-panel-raised-rgb: 21, 29, 38;
   --color-agent-rgb: 125, 211, 252;
   --color-user-rgb: 250, 204, 21;
   --color-risk-rgb: 251, 113, 133;
   --color-command-rgb: 167, 139, 250;
+  --color-bg-mid: #0d1117;
+  --color-bg-end: #090d12;
+  --color-text-strong: #dce8f3;
+  --color-text-soft: #d7e0e8;
+  --color-on-accent: #071015;
+  --color-user-soft: #fde68a;
+  --color-agent-soft: #bae6fd;
+  --color-line-rgb: 38, 52, 66;
+  --color-text-rgb: 230, 237, 243;
+  --color-ok-rgb: 52, 211, 153;
+  --color-black-rgb: 0, 0, 0;
   --font-ui: "Segoe UI Variable", "Microsoft YaHei UI", system-ui, sans-serif;
   --font-mono: "Cascadia Code", "JetBrains Mono", "Consolas", monospace;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 18px;
-  --shadow-panel: 0 24px 80px rgba(0, 0, 0, 0.34);
+  --shadow-panel: 0 24px 80px rgba(var(--color-black-rgb), 0.34);
   font-family: var(--font-ui);
   background: var(--color-bg);
   color: var(--color-text);
@@ -42,7 +54,7 @@ body {
   background:
     radial-gradient(circle at 14% 12%, rgba(var(--color-command-rgb), 0.16), transparent 30%),
     radial-gradient(circle at 82% 8%, rgba(var(--color-agent-rgb), 0.14), transparent 28%),
-    linear-gradient(135deg, #080b0f 0%, #0d1117 52%, #090d12 100%);
+    linear-gradient(135deg, var(--color-bg) 0%, var(--color-bg-mid) 52%, var(--color-bg-end) 100%);
 }
 
 button,
@@ -175,7 +187,7 @@ input:disabled {
 .chat-pane,
 .inspector-panel {
   min-height: 0;
-  border: 1px solid rgba(38, 52, 66, 0.9);
+  border: 1px solid rgba(var(--color-line-rgb), 0.9);
   border-radius: var(--radius-lg);
   background: rgba(var(--color-panel-rgb), 0.82);
   box-shadow: var(--shadow-panel);
@@ -223,7 +235,7 @@ h1 {
   height: 7px;
   border-radius: 50%;
   background: var(--color-ok);
-  box-shadow: 0 0 18px rgba(52, 211, 153, 0.75);
+  box-shadow: 0 0 18px rgba(var(--color-ok-rgb), 0.75);
 }
 
 .new-session-button,
@@ -242,9 +254,9 @@ h1 {
 
 .new-session-button {
   min-height: 42px;
-  color: #071015;
+  color: var(--color-on-accent);
   font-weight: 800;
-  background: linear-gradient(135deg, var(--color-user), #fde68a);
+  background: linear-gradient(135deg, var(--color-user), var(--color-user-soft));
   border-color: rgba(var(--color-user-rgb), 0.7);
 }
 
@@ -271,7 +283,7 @@ h1 {
   min-height: 56px;
   padding: 10px;
   text-align: left;
-  background: rgba(230, 237, 243, 0.045);
+  background: rgba(var(--color-text-rgb), 0.045);
 }
 
 .session-button span {
@@ -397,9 +409,9 @@ h1 {
 .approval-card {
   max-width: min(840px, 100%);
   padding: 18px;
-  border: 1px solid rgba(38, 52, 66, 0.95);
+  border: 1px solid rgba(var(--color-line-rgb), 0.95);
   border-radius: var(--radius-md);
-  background: rgba(21, 29, 38, 0.92);
+  background: rgba(var(--color-panel-raised-rgb), 0.92);
 }
 
 .user-message {
@@ -429,7 +441,7 @@ h1 {
 
 .message p {
   margin: 8px 0 0;
-  color: #d7e0e8;
+  color: var(--color-text-soft);
   line-height: 1.65;
   white-space: pre-wrap;
 }
@@ -461,9 +473,9 @@ h1 {
   display: grid;
   gap: 8px;
   padding: 12px;
-  border: 1px solid rgba(38, 52, 66, 0.95);
+  border: 1px solid rgba(var(--color-line-rgb), 0.95);
   border-radius: var(--radius-md);
-  background: rgba(8, 11, 15, 0.72);
+  background: rgba(var(--color-bg-rgb), 0.72);
 }
 
 .command-dock-row {
@@ -476,18 +488,18 @@ h1 {
   min-width: 0;
   min-height: 44px;
   padding: 0 14px;
-  border: 1px solid rgba(38, 52, 66, 1);
+  border: 1px solid rgba(var(--color-line-rgb), 1);
   border-radius: var(--radius-sm);
   color: var(--color-text);
-  background: rgba(230, 237, 243, 0.06);
+  background: rgba(var(--color-text-rgb), 0.06);
 }
 
 .command-dock button {
   min-height: 44px;
   padding: 0 20px;
-  color: #071015;
+  color: var(--color-on-accent);
   font-weight: 900;
-  background: linear-gradient(135deg, var(--color-agent), #bae6fd);
+  background: linear-gradient(135deg, var(--color-agent), var(--color-agent-soft));
 }
 
 .tool-summary,
@@ -531,12 +543,12 @@ h1 {
   padding: 12px;
   max-height: 260px;
   overflow: auto;
-  color: #dce8f3;
+  color: var(--color-text-strong);
   font-family: var(--font-mono);
   white-space: pre-wrap;
-  border: 1px solid rgba(38, 52, 66, 0.8);
+  border: 1px solid rgba(var(--color-line-rgb), 0.8);
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(var(--color-black-rgb), 0.28);
 }
 
 .risk-gate-status {
@@ -556,9 +568,9 @@ h1 {
 }
 
 .approval-actions button:first-child {
-  border-color: rgba(52, 211, 153, 0.55);
+  border-color: rgba(var(--color-ok-rgb), 0.55);
   color: var(--color-ok);
-  background: rgba(52, 211, 153, 0.08);
+  background: rgba(var(--color-ok-rgb), 0.08);
 }
 
 .approval-actions button:last-child {
@@ -586,7 +598,7 @@ h1 {
 .markdown-body p,
 .markdown-body ul,
 .markdown-body ol {
-  color: #d7e0e8;
+  color: var(--color-text-soft);
   line-height: 1.65;
 }
 
@@ -604,7 +616,7 @@ h1 {
 .capability-dialog th,
 .capability-dialog td {
   padding: 8px 10px;
-  border: 1px solid rgba(38, 52, 66, 0.9);
+  border: 1px solid rgba(var(--color-line-rgb), 0.9);
   text-align: left;
   vertical-align: top;
 }
@@ -622,7 +634,7 @@ h1 {
 .code-block {
   margin: 12px 0;
   overflow: hidden;
-  border: 1px solid rgba(38, 52, 66, 0.95);
+  border: 1px solid rgba(var(--color-line-rgb), 0.95);
   border-radius: var(--radius-sm);
 }
 
@@ -645,9 +657,9 @@ h1 {
   display: grid;
   gap: 10px;
   padding: 14px;
-  border: 1px solid rgba(38, 52, 66, 0.85);
+  border: 1px solid rgba(var(--color-line-rgb), 0.85);
   border-radius: var(--radius-md);
-  background: rgba(230, 237, 243, 0.04);
+  background: rgba(var(--color-text-rgb), 0.04);
 }
 
 .inspector-list {
@@ -685,7 +697,7 @@ h1 {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(0, 0, 0, 0.68);
+  background: rgba(var(--color-black-rgb), 0.68);
 }
 
 .modal {
@@ -693,7 +705,7 @@ h1 {
   max-height: min(760px, calc(100vh - 48px));
   overflow: auto;
   padding: 20px;
-  border: 1px solid rgba(38, 52, 66, 0.95);
+  border: 1px solid rgba(var(--color-line-rgb), 0.95);
   border-radius: var(--radius-lg);
   background: var(--color-panel-raised);
   box-shadow: var(--shadow-panel);

@@ -7,10 +7,8 @@ import { describe, expect, it } from 'vitest';
 const styles = readFileSync(resolve(process.cwd(), 'src', 'styles.css'), 'utf-8');
 
 function declarationsFor(selector: string) {
-  const selectorStart = styles.indexOf(`${selector} {`);
-  const bodyStart = selectorStart >= 0 ? styles.indexOf('{', selectorStart) + 1 : 0;
-  const bodyEnd = bodyStart > 0 ? styles.indexOf('}', bodyStart) : 0;
-  const body = bodyStart > 0 && bodyEnd > bodyStart ? styles.slice(bodyStart, bodyEnd) : '';
+  const match = styles.match(new RegExp(String.raw`(?:^|})\s*${selector}\s*\{([^}]*)\}`, 'm'));
+  const body = match?.[1] ?? '';
 
   return Object.fromEntries(
     body
@@ -61,6 +59,13 @@ describe('styles', () => {
       'min-height': '0',
       overflow: 'hidden',
     });
+  });
+
+  it('does not use hard-coded component colors outside root tokens', () => {
+    const componentCss = styles.replace(/:root\s*\{[^}]*\}/, '');
+
+    expect(componentCss).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    expect(componentCss).not.toMatch(/rgba?\(\s*(?:0\s*,\s*0\s*,\s*0|38\s*,\s*52\s*,\s*66|52\s*,\s*211\s*,\s*153)\b/);
   });
 
   it('contains Claw Rail, responsive, and reduced-motion rules', () => {
