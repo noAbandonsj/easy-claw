@@ -78,10 +78,13 @@ export function ToolCard({ block }: { block: ToolBlock }) {
   }
 
   return (
-    <article className={`tool-panel ${block.status}`}>
+    <article
+      aria-label={`工具调用 ${block.name}`}
+      className={`tool-panel run-event-card ${block.status}`}
+    >
       <div className="tool-summary">
         <div>
-          <span className="message-label">工具调用</span>
+          <span className="message-label">Run Event</span>
           <h2>{block.name}</h2>
         </div>
         <div className="tool-meta">
