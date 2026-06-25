@@ -243,24 +243,28 @@ export function App() {
     }
   }
 
+  const effectiveModel = webConfig.model || activeSession?.model;
+  const effectiveWorkspace = webConfig.workspacePath || activeSession?.workspace_path;
+  const effectiveStatus = notice || loadError || chat.status;
+
   return (
     <AppShell
       topbar={
         <StatusStrip
           activeSession={activeSession}
-          model={webConfig.model || activeSession?.model}
-          status={loadError || chat.status}
-          workspacePath={webConfig.workspacePath || activeSession?.workspace_path}
+          model={effectiveModel}
+          status={effectiveStatus}
+          workspacePath={effectiveWorkspace}
         />
       }
       inspector={
         <InspectorPanel
           activeSession={activeSession}
           loadError={loadError}
-          model={webConfig.model || activeSession?.model}
+          model={effectiveModel}
           notice={notice}
-          status={loadError || chat.status}
-          workspacePath={webConfig.workspacePath || activeSession?.workspace_path}
+          status={chat.status}
+          workspacePath={effectiveWorkspace}
         />
       }
       sidebar={
@@ -270,7 +274,7 @@ export function App() {
           onNewSession={() => void newSession()}
           onSelectSession={setActiveSessionId}
           sessions={sessions}
-          status={notice || loadError || chat.status}
+          status={effectiveStatus}
         />
       }
     >
