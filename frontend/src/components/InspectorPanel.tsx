@@ -1,12 +1,9 @@
 import type { SessionRecord } from '../api/types';
+import type { StatusStripProps } from './StatusStrip';
 
-type InspectorPanelProps = {
-  activeSession: SessionRecord | null;
-  loadError?: string | null;
-  model?: string | null;
+export type InspectorPanelProps = StatusStripProps & {
   notice?: string | null;
-  status: string;
-  workspacePath?: string | null;
+  loadError?: string | null;
 };
 
 function valueOrFallback(value: string | null | undefined, fallback: string): string {
