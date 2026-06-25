@@ -17,8 +17,10 @@ import { AppShell } from './components/AppShell';
 import { CapabilityDialog } from './components/CapabilityDialogs';
 import { ChatInput } from './components/ChatInput';
 import { ChatView } from './components/ChatView';
+import { InspectorPanel } from './components/InspectorPanel';
 import { Modal } from './components/Modal';
 import { Sidebar } from './components/Sidebar';
+import { StatusStrip } from './components/StatusStrip';
 import { useChatSocket } from './hooks/useChatSocket';
 import { parseSlashCommand } from './state/slashCommands';
 
@@ -241,8 +243,30 @@ export function App() {
     }
   }
 
+  const effectiveModel = webConfig.model || activeSession?.model;
+  const effectiveWorkspace = webConfig.workspacePath || activeSession?.workspace_path;
+  const effectiveStatus = notice || loadError || chat.status;
+
   return (
     <AppShell
+      topbar={
+        <StatusStrip
+          activeSession={activeSession}
+          model={effectiveModel}
+          status={effectiveStatus}
+          workspacePath={effectiveWorkspace}
+        />
+      }
+      inspector={
+        <InspectorPanel
+          activeSession={activeSession}
+          loadError={loadError}
+          model={effectiveModel}
+          notice={notice}
+          status={chat.status}
+          workspacePath={effectiveWorkspace}
+        />
+      }
       sidebar={
         <Sidebar
           activeSessionId={activeSessionId}
@@ -250,7 +274,7 @@ export function App() {
           onNewSession={() => void newSession()}
           onSelectSession={setActiveSessionId}
           sessions={sessions}
-          status={notice || loadError || chat.status}
+          status={effectiveStatus}
         />
       }
     >

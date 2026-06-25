@@ -3,6 +3,11 @@ import { ApprovalCard } from './ApprovalCard';
 import { MarkdownMessage } from './MarkdownMessage';
 import { ToolCard } from './ToolCard';
 
+function railClass(block: MessageBlock): string {
+  const status = 'status' in block ? ` rail-event-${block.status}` : '';
+  return `rail-event rail-event-${block.kind}${status}`;
+}
+
 export function MessageBlockView({
   block,
   onApprovalDecision,
@@ -10,36 +15,31 @@ export function MessageBlockView({
   block: MessageBlock;
   onApprovalDecision?: (approvalId: string, decision: 'approve' | 'reject') => void;
 }) {
+  let content;
+
   if (block.kind === 'user') {
-    return (
+    content = (
       <article className="message user-message">
         <span className="message-label">你</span>
         <p>{block.content}</p>
       </article>
     );
-  }
-
-  if (block.kind === 'assistant') {
-    return <MarkdownMessage content={block.content} streaming={block.streaming} />;
-  }
-
-  if (block.kind === 'tool') {
-    return <ToolCard block={block} />;
-  }
-
-  if (block.kind === 'approval') {
-    return (
-      <ApprovalCard
-        block={block}
-        onDecision={onApprovalDecision || (() => undefined)}
-      />
+  } else if (block.kind === 'assistant') {
+    content = <MarkdownMessage content={block.content} streaming={block.streaming} />;
+  } else if (block.kind === 'tool') {
+    content = <ToolCard block={block} />;
+  } else if (block.kind === 'approval') {
+    content = (
+      <ApprovalCard block={block} onDecision={onApprovalDecision || (() => undefined)} />
+    );
+  } else {
+    content = (
+      <article className="message error-message">
+        <span className="message-label">错误</span>
+        <p>{block.content}</p>
+      </article>
     );
   }
 
-  return (
-    <article className="message error-message">
-      <span className="message-label">错误</span>
-      <p>{block.content}</p>
-    </article>
-  );
+  return <div className={railClass(block)}>{content}</div>;
 }

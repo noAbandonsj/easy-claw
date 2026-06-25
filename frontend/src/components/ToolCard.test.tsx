@@ -7,7 +7,7 @@ describe('ToolCard', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders a merged tool call and result card', () => {
+  it('renders a run event card for a merged tool call and result', () => {
     render(
       <ToolCard
         block={{
@@ -21,6 +21,9 @@ describe('ToolCard', () => {
       />,
     );
 
+    expect(screen.getByRole('article', { name: '工具调用 read_file' })).toHaveClass(
+      'run-event-card',
+    );
     expect(screen.getByRole('heading', { name: 'read_file' })).toBeInTheDocument();
     expect(screen.getByText('已完成')).toBeInTheDocument();
     expect(screen.getByText(/README.md/)).toBeInTheDocument();

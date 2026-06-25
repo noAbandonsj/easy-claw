@@ -480,7 +480,7 @@ describe('App', () => {
     const input = await screen.findByLabelText('消息');
     await waitFor(() => expect(input).not.toBeDisabled());
     fireEvent.change(input, { target: { value: '/doctor' } });
-    fireEvent.click(screen.getByRole('button', { name: '执行' }));
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
 
     expect(await screen.findByRole('heading', { name: '本地诊断' })).toBeInTheDocument();
     expect(screen.getByText('deepseek-v4-pro')).toBeInTheDocument();
@@ -552,7 +552,7 @@ Run:
 cd frontend && npm test -- --run src/App.test.tsx
 ```
 
-Expected: FAIL because `AppShell` has not accepted `topbar`/`inspector`, `App` does not render the new regions, and the submit button still says `发送`.
+Expected: FAIL because `AppShell` has not accepted `topbar`/`inspector`, and `App` does not render the new regions.
 
 - [ ] **Step 3: Expand `AppShell`**
 
@@ -650,7 +650,7 @@ Replace the return block in `frontend/src/App.tsx` with:
 
 Place the three `const effective...` lines immediately before `return`. Remove the old inline `webConfig.model || activeSession?.model` and `webConfig.workspacePath || activeSession?.workspace_path` duplication only inside the return block.
 
-- [ ] **Step 5: Run tests and keep the known button-copy failure for Task 4**
+- [ ] **Step 5: Run tests to verify they pass**
 
 Run:
 
@@ -658,11 +658,9 @@ Run:
 cd frontend && npm test -- --run src/components/StatusStrip.test.tsx src/components/InspectorPanel.test.tsx src/App.test.tsx
 ```
 
-Expected: the new component tests PASS; `App.test.tsx` may still FAIL on `执行` until Task 4 changes `ChatInput`.
+Expected: PASS.
 
 - [ ] **Step 6: Commit the shell composition**
-
-If only the button-copy assertion is failing, commit the shell work:
 
 ```bash
 git add frontend/src/components/AppShell.tsx frontend/src/App.tsx frontend/src/App.test.tsx
