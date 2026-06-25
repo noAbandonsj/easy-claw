@@ -10,6 +10,10 @@ export function ChatInput({
   const [value, setValue] = useState('');
 
   function submitValue() {
+    if (disabled) {
+      return;
+    }
+
     const trimmed = value.trim();
     if (!trimmed) {
       return;

@@ -25,6 +25,17 @@ describe('ChatInput', () => {
     expect(screen.getByLabelText('消息')).toHaveValue('');
   });
 
+  it('does not submit with Enter after becoming disabled', () => {
+    const onSubmit = vi.fn();
+    const { rerender } = render(<ChatInput disabled={false} onSubmit={onSubmit} />);
+
+    fireEvent.change(screen.getByLabelText('消息'), { target: { value: '/status' } });
+    rerender(<ChatInput disabled={true} onSubmit={onSubmit} />);
+    fireEvent.keyDown(screen.getByLabelText('消息'), { key: 'Enter' });
+
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it('shows a command dock hint and disables execution while unavailable', () => {
     render(<ChatInput disabled={true} onSubmit={vi.fn()} />);
 

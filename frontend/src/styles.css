@@ -758,7 +758,8 @@ h1 {
   }
 
   .inspector-panel {
-    display: none;
+    display: grid;
+    grid-column: 1 / -1;
   }
 }
 
@@ -811,5 +812,9 @@ h1 {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
+  }
+
+  .rail-event-running::before {
+    animation: none !important;
   }
 }

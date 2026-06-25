@@ -22,6 +22,45 @@ function declarationsFor(selector: string) {
   );
 }
 
+function mediaBlockFor(query: string) {
+  const start = styles.indexOf(query);
+  if (start === -1) {
+    return '';
+  }
+
+  const blockStart = styles.indexOf('{', start);
+  let depth = 0;
+  for (let index = blockStart; index < styles.length; index += 1) {
+    const char = styles[index];
+    if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return styles.slice(blockStart + 1, index);
+      }
+    }
+  }
+
+  return '';
+}
+
+function declarationsForInBlock(block: string, selector: string) {
+  const match = block.match(new RegExp(String.raw`(?:^|})\s*${selector}\s*\{([^}]*)\}`, 'm'));
+  const body = match?.[1] ?? '';
+
+  return Object.fromEntries(
+    body
+      .split(';')
+      .map(declaration => declaration.trim())
+      .filter(Boolean)
+      .map(declaration => {
+        const [property, ...valueParts] = declaration.split(':');
+        return [property.trim(), valueParts.join(':').trim()];
+      }),
+  );
+}
+
 describe('styles', () => {
   it('defines the Obsidian Runbook theme tokens', () => {
     expect(declarationsFor(':root')).toMatchObject({
@@ -74,5 +113,22 @@ describe('styles', () => {
     expect(styles).toContain('@media (max-width: 1120px)');
     expect(styles).toContain('@media (max-width: 720px)');
     expect(styles).toContain('@media (prefers-reduced-motion: reduce)');
+  });
+
+  it('preserves the inspector as a compact tablet grid row', () => {
+    const tabletBlock = mediaBlockFor('@media (max-width: 1120px)');
+
+    expect(declarationsForInBlock(tabletBlock, '.inspector-panel')).toMatchObject({
+      display: 'grid',
+      'grid-column': '1 / -1',
+    });
+  });
+
+  it('disables the running rail pulse for reduced-motion users', () => {
+    const reducedMotionBlock = mediaBlockFor('@media (prefers-reduced-motion: reduce)');
+
+    expect(declarationsForInBlock(reducedMotionBlock, '.rail-event-running::before')).toMatchObject({
+      animation: 'none !important',
+    });
   });
 });
